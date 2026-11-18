@@ -31,6 +31,18 @@ for (const [f, k] of [['IMG_0002.jpg', '1'], ['IMG_0003.jpg', '1'], ['IMG_0003.j
   await (await tile(f)).click()
   await page.keyboard.press(k)
 }
+await (await tile('IMG_0003.jpg')).click()
+await page.keyboard.press('Alt+5')
+await page.keyboard.press('Alt+8')
+for (const f of ['IMG_0007.jpg', 'IMG_0008.jpg', 'IMG_0009.jpg', 'IMG_0010.jpg']) {
+  await (await tile(f)).click()
+  await page.keyboard.press('1')
+}
+await page.getByRole('button', { name: 'Paket Anna ansehen' }).click()
+await page.waitForTimeout(800)
+await (await tile('IMG_0008.jpg')).click()
+await page.screenshot({ path: path.join(shots, 'paketansicht.png') })
+await page.getByRole('button', { name: 'Zurück zur Medienübersicht' }).click()
 await (await tile('IMG_0002.jpg')).click()
 await (await tile('IMG_0004.jpg')).click({ modifiers: ['Shift'] })
 await page.waitForTimeout(800)

@@ -107,11 +107,9 @@ export function LeftSidebar({ collapsed, auto }: { collapsed: boolean; auto: boo
         <button className="nav-item" onClick={() => s.openDialog({ type: 'jobs' })}>
           <History size={16} /> Auftragsverlauf
         </button>
-        {settings!.duplicateDetection && (
-          <button className="nav-item" onClick={() => s.openDialog({ type: 'duplicates' })}>
-            <Copy size={16} /> Duplikate
-          </button>
-        )}
+        <button className="nav-item" onClick={() => s.openDialog({ type: 'duplicates' })}>
+          <Copy size={16} /> Duplikate & Ähnliche
+        </button>
       </div>
     </aside>
   )

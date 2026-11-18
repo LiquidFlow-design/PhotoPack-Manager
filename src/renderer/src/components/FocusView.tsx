@@ -1,4 +1,6 @@
-import { ChevronLeft, ChevronRight, FileWarning, FolderSearch, Minus, Plus, Scan, Video } from 'lucide-react'
+import { ChevronLeft, ChevronRight, FileWarning, FolderSearch, Minus, Plus, Scan, Star, Video } from 'lucide-react'
+import { COLOR_HEX, COLOR_LABEL } from '@shared/filters'
+import type { ColorLabel } from '@shared/types'
 import { useEffect, useRef, useState } from 'react'
 import type { MediaDetail } from '@shared/types'
 import { api, mediaUrl, previewUrl } from '../lib/api'
@@ -78,6 +80,32 @@ export function FocusView() {
           )}
         </div>
         <div className="row">
+          <div className="row" style={{ gap: 0 }} role="group" aria-label="Bewertung (Alt+0–5)">
+            {[1, 2, 3, 4, 5].map((n) => (
+              <button
+                key={n}
+                className={'star-btn' + (m.rating >= n ? ' on' : '')}
+                aria-label={`${n} Sterne`}
+                title={`${n} Sterne (Alt+${n})`}
+                onClick={() => void useStore.getState().setRating(m.rating === n ? 0 : n)}
+              >
+                <Star size={16} fill={m.rating >= n ? 'currentColor' : 'none'} />
+              </button>
+            ))}
+          </div>
+          <div className="row" style={{ gap: 4 }} role="group" aria-label="Farbmarkierung (Alt+6–9)">
+            {(Object.keys(COLOR_LABEL) as ColorLabel[]).map((c) => (
+              <button
+                key={c}
+                className="color-btn"
+                style={{ background: COLOR_HEX[c] }}
+                aria-pressed={m.colorLabel === c}
+                aria-label={COLOR_LABEL[c]}
+                title={COLOR_LABEL[c]}
+                onClick={() => void useStore.getState().toggleColor(c)}
+              />
+            ))}
+          </div>
           <button className="btn sm" onClick={() => void api.media.reveal(m.id)} title="Im Explorer anzeigen">
             <FolderSearch size={14} /> Im Explorer
           </button>

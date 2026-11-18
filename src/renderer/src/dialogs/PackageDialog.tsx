@@ -1,4 +1,4 @@
-import { FolderOpen, FolderOutput, Send, Trash2, Undo2 } from 'lucide-react'
+import { Eye, FileArchive, FolderOpen, FolderOutput, Send, Trash2, Undo2 } from 'lucide-react'
 import { useState } from 'react'
 import { api } from '../lib/api'
 import { chooseDirFlow } from '../lib/flows'
@@ -56,10 +56,34 @@ export function PackageDialog({ packageId }: { packageId: string | null }) {
           <button
             className="btn"
             onClick={() => {
+              s.closeDialog()
+              void s.openPackageView(p.id)
+            }}
+          >
+            <Eye size={14} /> Ansehen
+          </button>
+          <button
+            className="btn"
+            disabled={!p.mediaCount}
+            onClick={async () => {
+              try {
+                const r = await api.packages.exportZip(p.id)
+                if (!r) return
+                s.toast(r.skipped.length ? 'warn' : 'success', `ZIP erstellt (${r.entries} Dateien)${r.skipped.length ? `, ${r.skipped.length} übersprungen` : ''}: ${r.file}`)
+              } catch (e) {
+                s.toast('error', (e as Error).message)
+              }
+            }}
+          >
+            <FileArchive size={14} /> Als ZIP …
+          </button>
+          <button
+            className="btn"
+            onClick={() => {
               s.openDialog({ type: 'export', packageIds: [p.id] })
             }}
           >
-            <Send size={14} /> Nur dieses Paket exportieren
+            <Send size={14} /> Exportieren
           </button>
           <button className="btn primary" onClick={close}>
             Fertig
@@ -78,7 +102,7 @@ export function PackageDialog({ packageId }: { packageId: string | null }) {
           <div className="row">
             <input id="pkg-name" className="input" value={name} maxLength={80} onChange={(e) => setName(e.target.value)} onBlur={() => name.trim() && name.trim() !== p.name && void save({ name: name.trim() })} />
           </div>
-          {p.exportedCount > 0 && !p.targetDir && <div className="tiny muted">Hinweis: Bei Umbenennung gehen künftige Exporte in einen Unterordner mit neuem Namen; bisherige Dateien bleiben am alten Ort.</div>}
+          {p.exportedCount > 0 && !p.targetDir && <div className="tiny muted">Bisherige Exporte bleiben im alten Ordner.</div>}
         </div>
       </form>
       {err && <div className="callout err">{err}</div>}
@@ -110,7 +134,7 @@ export function PackageDialog({ packageId }: { packageId: string | null }) {
         <div className="mono small ellipsis" title={p.effectiveTargetDir ?? ''}>
           {p.effectiveTargetDir ?? <span className="warn">Nicht festgelegt – globalen Ausgabeordner wählen oder individuellen Ordner setzen.</span>}
         </div>
-        <div className="tiny muted">{p.targetDir ? 'Individueller Zielordner' : 'Unterordner des globalen Ausgabeordners'}</div>
+
         <div className="row" style={{ marginTop: 6, flexWrap: 'wrap' }}>
           <button className="btn sm" onClick={() => void chooseDirFlow('package', p.id)}>
             <FolderOutput size={13} /> Individuellen Ordner wählen

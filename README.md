@@ -10,7 +10,12 @@ auf mehrere Personen bzw. **Pakete** – vollständig offline, ohne Konto, Cloud
 * **Kopieren** oder **Verschieben** mit projektinternem **Wiederherstellungsbereich** (Standard 30 Tage)
 * Jede Kopie wird per **SHA-256** verifiziert, niemals wird still überschrieben
 * Persistente Warteschlange mit Pause, Abbruch, Wiederholung und Wiederanlauf nach Absturz
-* Optionale exakte **Duplikaterkennung** (Größe + SHA-256), ohne automatische Löschung
+* **Paketansicht** mit eigener Reihenfolge per **Drag & Drop**, ZIP-Export je Paket
+* **RAW+JPEG-Paare** und **XMP-Sidecars** werden gemeinsam zugeordnet und übertragen
+* **Bewertungen** (Sterne) und **Farbmarkierungen**, Filter und Sortierung danach
+* Exakte **Duplikate** (Größe + SHA-256) und **ähnliche Bilder** (Wahrnehmungs-Hash), ohne automatische Löschung
+* **Präsentationsfenster** für einen zweiten Bildschirm
+* Projektsicherung/-import (`.ppmproj`)
 * Hell, Dunkel oder System; verstellbare, einklappbare Seitenleisten
 
 Screenshots: [`docs/screenshots/`](docs/screenshots/).
@@ -41,6 +46,7 @@ Programmdaten (Datenbank, Vorschau-Cache, Wiederherstellungsbereich) liegen unte
    **Sofortmodus:** Jede neue Zuordnung wird sofort im Hintergrund übertragen.
 5. **Verschieben:** Die Quelle wird erst entfernt, wenn alle Zielkopien geprüft sind, und bleibt im
    Wiederherstellungsbereich („gehalten“). Dort lässt sie sich wiederherstellen, freigeben oder löschen.
+6. **Paketansicht** (Augen-Symbol am Paket): Inhalt prüfen und per Drag & Drop sortieren.
 
 Schnellzuordnung (rechte Seitenleiste oder Einstellungen): „Bild bleibt geöffnet“, „Nach Zuordnung weiter“
 oder „Mehrere Pakete wählen, dann Enter“.
@@ -51,7 +57,11 @@ oder „Mehrere Pakete wählen, dann Enter“.
 | Pfeiltasten, Pos1/Ende | Navigation (Shift erweitert die Auswahl im Raster) |
 | Enter | Fokusansicht / weiter / vorgemerkte Pakete übernehmen |
 | Esc | Dialog/Popover schließen, zurück zum Raster |
-| Strg+A / Strg+Z / Strg+F | Alle sichtbaren auswählen / Zuordnung rückgängig / Suche |
+| Strg+A / Strg+Z / Strg+Y / Strg+F | Alle sichtbaren auswählen / rückgängig / wiederholen / Suche |
+| Alt+0–5 | Bewertung (0 = keine) |
+| Alt+6–9 | Farbmarkierung Rot / Gelb / Grün / Blau (umschalten) |
+| Strg+Pfeiltasten | Paketansicht: Auswahl in der Reihenfolge verschieben |
+| Entf | Paketansicht: Auswahl aus dem Paket entfernen |
 | + / − / 0 | Zoom in der Fokusansicht |
 
 ## Entwicklung
@@ -94,7 +104,9 @@ npm ci
 npm run dist:win     # release\…-win-x64.exe (Installer) und …-portable.exe
 ```
 
-**Cross-Build von Linux/macOS:** Die Windows-Binärdateien (sharp/libvips, ExifTool, FFmpeg) werden zusätzlich
+`dist:win` lädt vorher den LGPL-Build von FFmpeg nach `vendor/ffmpeg/` (`npm run fetch:ffmpeg -- win32-x64`).
+
+**Cross-Build von Linux/macOS:** Die Windows-Binärdateien (sharp/libvips, ExifTool, LGPL-FFmpeg) werden zusätzlich
 geladen, ohne die lokalen Abhängigkeiten zu verändern:
 
 ```bash
@@ -117,7 +129,8 @@ Aufbau von Reputation).
 
 Versionen sind über `package-lock.json` fixiert (`npm ci`). Native Module werden nicht neu kompiliert
 (`npmRebuild: false`; better-sqlite3 und sharp liefern N-API-Prebuilds). Externe Werkzeuge stammen aus
-versionierten npm-Paketen (ffmpeg-static, ffprobe-static, exiftool-vendored).
+versionierten npm-Paketen (exiftool-vendored) bzw. für FFmpeg aus einem LGPL-Release, dessen Herkunft und
+SHA-256 in `vendor/ffmpeg/<ziel>/MANIFEST.json` protokolliert werden (für feste Versionen `FFMPEG_LGPL_URL` setzen).
 
 ## Datensicherheit – das Wichtigste
 
@@ -133,4 +146,4 @@ versionierten npm-Paketen (ffmpeg-static, ffprobe-static, exiftool-vendored).
 
 ## Lizenzen
 
-Siehe [THIRD_PARTY_NOTICES.md](THIRD_PARTY_NOTICES.md) (u. a. FFmpeg als GPL-Build, libvips LGPL).
+Siehe [THIRD_PARTY_NOTICES.md](THIRD_PARTY_NOTICES.md) (u. a. FFmpeg und libvips unter LGPL).

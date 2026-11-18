@@ -46,16 +46,16 @@ Fenster (`file://` bzw. Dev-Server) geprüft.
 
 | Gruppe | Methoden |
 |---|---|
-| app | startup, getSettings, updateSettings, clearThumbCache, openLogFolder |
-| projects | list, create, open, rename, remove, update, saveUi, chooseOutputDir, clearOutputDir, chooseRecoveryDir, resetRecoveryDir, tasks, cancelTask |
+| app | startup, getSettings, updateSettings, clearThumbCache, openLogFolder, openPresenter, closePresenter, presenterShow, presenterNav, presenterOpen, presenterCurrent |
+| projects | list, create, open, rename, remove, update, saveUi, chooseOutputDir, clearOutputDir, chooseRecoveryDir, resetRecoveryDir, tasks, cancelTask, exportBackup, importBackup |
 | sources | add, confirmAdd, rescan, remove, list |
-| media | list, rows, detail, reveal, revealPath |
-| packages | list, create, update, remove, chooseTargetDir, clearTargetDir, openTarget |
+| media | list, rows, detail, reveal, revealPath, setRating, setColor |
+| packages | list, create, update, remove, chooseTargetDir, clearTargetDir, openTarget, order, reorderMedia, reorder, exportZip |
 | assign | apply, list |
 | exports | preview, start |
 | jobs | list, items, pause, resume, cancel, retry |
-| recovery | overview, restore, release, hold, purge, openFolder |
-| duplicates | scan, groups |
+| recovery | overview, restore, release, hold, purge, openFolder, releaseAll |
+| duplicates | scan, groups, scanSimilar, similarGroups |
 
 Ereignisse Main → Renderer über `ppm:event` (`AppEvent`): media-changed (voll oder ID-Liste; Vorschau-Ereignisse
 werden zu 150-ms-Bündeln zusammengefasst), packages-/assignments-/sources-/jobs-changed, task-progress,
@@ -71,10 +71,10 @@ Eine Datenbank `photopack.sqlite` im Benutzerdatenordner enthält alle Projekte.
 | `app_settings` | globale UI-Einstellungen (Theme, Layout, Schnellzuordnung, Aufbewahrung …) als JSON |
 | `projects` | Name, Ausgabeordner, Modus (collect/instant), Operation (copy/move), Konfliktregel, eigener Recovery-Ordner, `ui_state` (Filter/Sortierung je Projekt) |
 | `sources` | Quellordner, `real_path` (Symlinks aufgelöst), Scanstatus, Ausschlüsse |
-| `media` | `original_path`, `path_key` (eindeutig je Projekt), `current_path` (kanonischer Ort), `location` (source/recovery/missing), Größe, mtime, SHA-256, Metadaten, Vorschau-Status, Duplikatgruppe. **Keine BLOBs.** |
+| `media` | `original_path`, `path_key` (eindeutig je Projekt), `current_path` (kanonischer Ort), `location` (source/recovery/missing), Größe, mtime, SHA-256, Metadaten, Vorschau-Status, Duplikatgruppe; ab Migration 3: `role` (main/sidecar), `parent_id` (Sidecar → Medium), `pair_id` (RAW↔JPEG), `rating`, `color_label`, `phash` (dHash), `sim_group`. **Keine BLOBs.** |
 | `packages` | Name (eindeutig je Projekt), Farbe, Kürzel 1–9 (partiell eindeutig), individueller Zielordner |
-| `media_packages` | Zuordnung n:m |
-| `jobs` | Auftrag: Art, Modus, Operation, Konfliktregel, Status, Snapshot-Zusammenfassung, `interrupted` |
+| `media_packages` | Zuordnung n:m, `position` = eigene Reihenfolge im Paket (neue Zuordnungen am Ende) |
+| `jobs` | Auftrag: Art, Modus, Operation, Konfliktregel, Status, Snapshot-Zusammenfassung, `interrupted`, `start_after` (Startverzögerung im Sofortmodus) |
 | `job_items` | Einzelvorgang: Art (copy/release_source/restore), **Snapshot** (src_path, src_size, src_mtime, src_sha256, dest_dir, dest_name), Zwischendatei, Endpfad, Ergebnis-Hash, Versuche, Fehler; **Idempotenzschlüssel** mit partiellem Unique-Index (`WHERE active = 1`) |
 | `job_item_events` | zeitgestempelte Statusübergänge jedes Eintrags |
 | `transfer_destinations` | erfolgreich erzeugte/erkannte Zieldateien je (Medium, Paket) inkl. SHA-256 – verhindert Doppelexport |
@@ -181,6 +181,18 @@ Diese Pfade sind durch simulierte Abstürze an 10 Fehlerpunkten getestet (tests/
   Bereinigung (Frist 30 Tage ab Verschiebung, mindestens 1 Tag ab Freigabe). Wurde eine Datei bereinigt, kann
   eine verifizierte Exportkopie mit identischem SHA-256 als Quelle dienen; sonst wird das Medium als fehlend
   gemeldet.
+
+### Sidecars und Paare
+
+* Indexierung: `*.xmp` wird dem Medium gleichen Namens im selben Ordner zugeordnet (`IMG.xmp` → RAW bevorzugt,
+  `IMG.CR3.xmp` → exakt). Sidecars sind Zeilen mit `role = 'sidecar'`, erscheinen nicht im Raster und werden bei
+  Zuordnungen automatisch mitgeführt (`expandDelta`). Dadurch gelten für sie alle Invarianten I1–I6 unverändert.
+* RAW+JPEG-Paare (`pair_id`) werden nach jeder Indexierung neu berechnet; Zuordnung und Bewertung wirken auf beide.
+
+### Präsentationsfenster
+
+Zweites `BrowserWindow` (gleiche Sicherheitseinstellungen, `#presenter`). Der Main-Prozess leitet
+`presenter-show` (aktives Medium) an das Präsentationsfenster und `presenter-nav` (Pfeiltasten) an das Hauptfenster weiter.
 
 ## 5. Warteschlange
 

@@ -1,4 +1,4 @@
-import { AlertTriangle, CheckCircle2, Info, RefreshCw, XCircle } from 'lucide-react'
+import { AlertTriangle, CheckCircle2, RefreshCw, XCircle } from 'lucide-react'
 import { useCallback, useEffect, useState } from 'react'
 import type { ConflictPolicy, ExportPlanPreview, Operation } from '@shared/types'
 import { api } from '../lib/api'
@@ -66,9 +66,7 @@ export function ExportDialog({ packageIds }: { packageIds: string[] | null }) {
       onClose={close}
       footer={
         <>
-          <span className="hint" style={{ marginRight: 'auto', alignSelf: 'center' }}>
-            Der Plan wird als Momentaufnahme gespeichert. Spätere Änderungen an Zuordnungen beeinflussen diesen Auftrag nicht.
-          </span>
+          <span style={{ marginRight: 'auto' }} />
           <button className="btn" onClick={close}>
             Schließen
           </button>
@@ -110,14 +108,6 @@ export function ExportDialog({ packageIds }: { packageIds: string[] | null }) {
         </button>
       </div>
 
-      <div className="callout info">
-        <Info size={16} />
-        <span>
-          Niemals wird still überschrieben. Identische Dateien am Ziel werden sicher übersprungen. Jede Kopie wird per SHA-256 geprüft, bevor sie festgeschrieben wird.
-          {operation === 'move' &&
-            ' Beim Verschieben wird die Quelle erst entfernt, wenn alle Zielkopien geprüft sind; sie bleibt im projektinternen Wiederherstellungsbereich und dient dort als Quelle für spätere Paketzuordnungen.'}
-        </span>
-      </div>
 
       {error && (
         <div className="callout err">

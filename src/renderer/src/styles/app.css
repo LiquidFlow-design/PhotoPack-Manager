@@ -1361,3 +1361,121 @@ button:disabled {
     display: none;
   }
 }
+
+/* ---------- Paketansicht / Drag & Drop ---------- */
+.tile[draggable='true'] {
+  cursor: grab;
+}
+.tile.drop-before::before,
+.tile.drop-after::after {
+  content: '';
+  position: absolute;
+  top: 4px;
+  bottom: 4px;
+  width: 4px;
+  border-radius: 3px;
+  background: var(--accent);
+  z-index: 3;
+  box-shadow: 0 0 0 2px var(--bg);
+}
+.tile.drop-before::before {
+  left: -9px;
+}
+.tile.drop-after::after {
+  right: -9px;
+}
+.drag-badge {
+  position: fixed;
+  top: -100px;
+  left: -100px;
+  background: var(--accent);
+  color: var(--accent-text);
+  padding: 5px 10px;
+  border-radius: 8px;
+  font-size: 12px;
+  font-weight: 650;
+}
+.rating {
+  display: inline-flex;
+  align-items: center;
+  gap: 2px;
+  color: #e3b341;
+  font-weight: 650;
+}
+.pkg-row {
+  display: flex;
+  align-items: center;
+  gap: 2px;
+  border-radius: 10px;
+}
+.pkg-row.drop-before {
+  box-shadow: 0 -2px 0 var(--accent);
+}
+.pkg-row.drop-after {
+  box-shadow: 0 2px 0 var(--accent);
+}
+.pkg-row.dragging {
+  opacity: 0.5;
+}
+.grip {
+  cursor: grab;
+  color: var(--faint);
+  display: grid;
+  place-items: center;
+  width: 16px;
+  flex: none;
+}
+.star-btn {
+  border: 0;
+  background: transparent;
+  padding: 2px;
+  color: var(--faint);
+  display: inline-grid;
+  place-items: center;
+}
+.star-btn.on {
+  color: #e3b341;
+}
+.color-btn {
+  width: 16px;
+  height: 16px;
+  border-radius: 50%;
+  border: 2px solid transparent;
+  padding: 0;
+}
+.color-btn[aria-pressed='true'] {
+  border-color: var(--text);
+}
+.tabs {
+  display: flex;
+  gap: 4px;
+  border-bottom: 1px solid var(--line);
+  margin-bottom: 12px;
+}
+.tabs button {
+  border: 0;
+  background: transparent;
+  padding: 8px 12px;
+  color: var(--muted);
+  border-bottom: 2px solid transparent;
+  font-size: 12.5px;
+}
+.tabs button[aria-selected='true'] {
+  color: var(--accent);
+  border-bottom-color: var(--accent);
+  font-weight: 650;
+}
+.presenter {
+  position: fixed;
+  inset: 0;
+  background: #000;
+  display: grid;
+  place-items: center;
+  color: #ccc;
+}
+.presenter img,
+.presenter video {
+  max-width: 100vw;
+  max-height: 100vh;
+  object-fit: contain;
+}

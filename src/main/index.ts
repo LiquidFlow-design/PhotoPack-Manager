@@ -18,6 +18,7 @@ registerSchemePrivileges()
 let svc: AppService | null = null
 let win: BrowserWindow | null = null
 let presenter: BrowserWindow | null = null
+let presenterMedia: number | null = null
 let quitting = false
 
 // Nur eine Instanz: verhindert konkurrierende Schreibzugriffe auf Datenbank und Dateien
@@ -131,9 +132,13 @@ async function start(): Promise<void> {
     {
       openPresenter,
       closePresenter,
-      presenterShow: (mediaId) => sendPresenter({ type: 'presenter-show', mediaId }),
+      presenterShow: (mediaId) => {
+        presenterMedia = mediaId
+        sendPresenter({ type: 'presenter-show', mediaId })
+      },
       presenterNav: (delta) => send({ type: 'presenter-nav', delta }),
-      isPresenterOpen: () => !!presenter && !presenter.isDestroyed()
+      isPresenterOpen: () => !!presenter && !presenter.isDestroyed(),
+      presenterCurrent: () => presenterMedia
     }
   )
   createWindow()

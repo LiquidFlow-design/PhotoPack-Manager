@@ -1,8 +1,8 @@
 import { X } from 'lucide-react'
 import { useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react'
 import { createPortal } from 'react-dom'
-import { activeFilterCount, resetFilters } from '@shared/filters'
-import type { AssignmentFilter, DuplicateFilter, ExportFilter, FilterState, MediaKind } from '@shared/types'
+import { activeFilterCount, COLOR_HEX, COLOR_LABEL, resetFilters } from '@shared/filters'
+import type { AssignmentFilter, ColorLabel, DuplicateFilter, ExportFilter, FilterState, MediaKind } from '@shared/types'
 import { useStore } from '../state/store'
 
 const KINDS: Array<[MediaKind, string]> = [
@@ -147,11 +147,33 @@ export function FilterPopover() {
         </label>
         <select id="f-dup" className="select" style={{ marginTop: 5 }} value={f.duplicates} onChange={(e) => set({ duplicates: e.target.value as DuplicateFilter })}>
           <option value="all">Alle</option>
-          <option value="only">Nur Duplikate</option>
+          <option value="only">Nur exakte Duplikate</option>
+          <option value="similar">Nur ähnliche Bilder</option>
           <option value="none">Ohne Duplikate</option>
         </select>
-        {!s.settings?.duplicateDetection && <p className="hint" style={{ margin: '4px 0 0' }}>Duplikaterkennung ist in den Einstellungen deaktiviert.</p>}
       </div>
+
+      <fieldset className="pop-section" style={{ border: 0, padding: 0 }}>
+        <legend className="field-label">Bewertung</legend>
+        <div className="toggle-chips" style={{ marginTop: 6 }}>
+          {[0, 1, 2, 3, 4, 5].map((n) => (
+            <button key={n} className="toggle-chip" aria-pressed={f.minRating === n} onClick={() => set({ minRating: n })} aria-label={n ? `Mindestens ${n} Sterne` : 'Alle Bewertungen'}>
+              {n ? `≥ ${'★'.repeat(n)}` : 'Alle'}
+            </button>
+          ))}
+        </div>
+      </fieldset>
+
+      <fieldset className="pop-section" style={{ border: 0, padding: 0 }}>
+        <legend className="field-label">Farbmarkierung</legend>
+        <div className="toggle-chips" style={{ marginTop: 6 }}>
+          {(Object.keys(COLOR_LABEL) as ColorLabel[]).map((c) => (
+            <button key={c} className="toggle-chip" aria-pressed={f.colorLabels.includes(c)} onClick={() => set({ colorLabels: toggle(f.colorLabels, c) })}>
+              <span className="dot" style={{ background: COLOR_HEX[c] }} /> {COLOR_LABEL[c]}
+            </button>
+          ))}
+        </div>
+      </fieldset>
 
       <div className="pop-section">
         <label className="field-label" htmlFor="f-loc">

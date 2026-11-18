@@ -31,9 +31,6 @@ export function SourcesDialog() {
         </>
       }
     >
-      <p className="hint" style={{ marginTop: 0 }}>
-        Unterordner werden einbezogen. Symbolische Links und Junctions werden nicht verfolgt. Ausgabe-, Paket- und Wiederherstellungsordner werden automatisch ausgeschlossen.
-      </p>
       {sources.length === 0 && <p className="muted">Noch keine Quellen.</p>}
       {sources.map((s) => (
         <div key={s.id} className="list-row">

@@ -1,5 +1,5 @@
-import { Check, FolderOutput, Minus, MoreHorizontal, PackagePlus, PanelRightClose, PanelRightOpen, Send } from 'lucide-react'
-import { useMemo } from 'react'
+import { Check, Eye, FolderOutput, GripVertical, Minus, MoreHorizontal, PackagePlus, PanelRightClose, PanelRightOpen, Send } from 'lucide-react'
+import { useMemo, useRef, useState } from 'react'
 import { triState } from '@shared/assignment'
 import type { PackageInfo, QuickAssignMode } from '@shared/types'
 import { api } from '../lib/api'
@@ -84,6 +84,101 @@ export function PackageButton({ p, compact = false }: { p: PackageInfo; compact?
   )
 }
 
+/** Paketliste mit Drag & Drop zum Umsortieren (Griff links) und Paketansicht. */
+function PackageList() {
+  const packages = useStore((s) => s.packages)
+  const packageView = useStore((s) => s.packageView)
+  const project = useStore((s) => s.project)
+  const drag = useRef<string | null>(null)
+  const [drop, setDrop] = useState<{ id: string; after: boolean } | null>(null)
+  const s = useStore.getState()
+
+  const commit = async () => {
+    const from = drag.current
+    const d = drop
+    drag.current = null
+    setDrop(null)
+    if (!from || !d || from === d.id || !project) return
+    const ids = packages.map((p) => p.id).filter((x) => x !== from)
+    let at = ids.indexOf(d.id)
+    if (d.after) at++
+    ids.splice(at, 0, from)
+    useStore.setState({ packages: ids.map((id) => packages.find((p) => p.id === id)!) })
+    await api.packages.reorder(project.id, ids)
+  }
+  const move = async (id: string, delta: number) => {
+    if (!project) return
+    const ids = packages.map((p) => p.id)
+    const i = ids.indexOf(id)
+    const j = i + delta
+    if (j < 0 || j >= ids.length) return
+    ;[ids[i], ids[j]] = [ids[j], ids[i]]
+    useStore.setState({ packages: ids.map((x) => packages.find((p) => p.id === x)!) })
+    await api.packages.reorder(project.id, ids)
+  }
+
+  return (
+    <div role="group" aria-label="Pakete zuordnen" style={{ display: 'flex', flexDirection: 'column', gap: 3 }}>
+      {packages.map((p) => (
+        <div
+          key={p.id}
+          className={'pkg-row' + (drop?.id === p.id ? (drop.after ? ' drop-after' : ' drop-before') : '') + (drag.current === p.id ? ' dragging' : '')}
+          onDragOver={(e) => {
+            if (!drag.current) return
+            e.preventDefault()
+            const r = e.currentTarget.getBoundingClientRect()
+            const after = e.clientY > r.top + r.height / 2
+            if (drop?.id !== p.id || drop.after !== after) setDrop({ id: p.id, after })
+          }}
+          onDrop={(e) => {
+            e.preventDefault()
+            void commit()
+          }}
+        >
+          <span
+            className="grip"
+            draggable
+            role="button"
+            tabIndex={0}
+            aria-label={`${p.name} verschieben (Strg+Pfeil hoch/runter)`}
+            title="Ziehen zum Umsortieren"
+            onDragStart={(e) => {
+              drag.current = p.id
+              e.dataTransfer.effectAllowed = 'move'
+              e.dataTransfer.setData('text/plain', p.id)
+            }}
+            onDragEnd={() => {
+              drag.current = null
+              setDrop(null)
+            }}
+            onKeyDown={(e) => {
+              if (e.ctrlKey && (e.key === 'ArrowUp' || e.key === 'ArrowDown')) {
+                e.preventDefault()
+                e.stopPropagation()
+                void move(p.id, e.key === 'ArrowUp' ? -1 : 1)
+              }
+            }}
+          >
+            <GripVertical size={14} />
+          </span>
+          <PackageButton p={p} />
+          <button
+            className={'icon-btn ghost sm' + (packageView === p.id ? ' active' : '')}
+            title="Paket ansehen und sortieren"
+            aria-label={`Paket ${p.name} ansehen`}
+            onClick={() => (packageView === p.id ? s.closePackageView() : void s.openPackageView(p.id))}
+          >
+            <Eye size={15} />
+          </button>
+          <button className="icon-btn ghost sm" title="Paket bearbeiten" aria-label={`Paket ${p.name} bearbeiten`} onClick={() => s.openDialog({ type: 'package', packageId: p.id })}>
+            <MoreHorizontal size={15} />
+          </button>
+        </div>
+      ))}
+    </div>
+  )
+}
+
 export function RightSidebar({ collapsed, auto }: { collapsed: boolean; auto: boolean }) {
   const s = useStore()
   const { packages, selection, settings, project, staged } = s
@@ -130,26 +225,14 @@ export function RightSidebar({ collapsed, auto }: { collapsed: boolean; auto: bo
             </button>
           </div>
         </div>
-        <div role="group" aria-label="Pakete zuordnen" style={{ display: 'flex', flexDirection: 'column', gap: 3 }}>
-          {packages.map((p) => (
-            <div key={p.id} className="row" style={{ gap: 2 }}>
-              <PackageButton p={p} />
-              <button className="icon-btn ghost sm" title="Paket bearbeiten" aria-label={`Paket ${p.name} bearbeiten`} onClick={() => s.openDialog({ type: 'package', packageId: p.id })}>
-                <MoreHorizontal size={15} />
-              </button>
-            </div>
-          ))}
-        </div>
-        {packages.length === 0 && <p className="hint">Noch keine Pakete. Erstelle z. B. ein Paket je Person.</p>}
+        <PackageList />
         <button className="add-btn" style={{ marginTop: 8 }} onClick={createPackageFlow}>
           <PackagePlus size={16} /> Neues Paket erstellen
         </button>
 
         {staged.size > 0 && (
           <div className="callout info" style={{ marginTop: 10 }}>
-            <span style={{ flex: 1 }}>
-              {staged.size} Paket(e) vorgemerkt. <b>Enter</b> übernimmt für die Auswahl.
-            </span>
+            <span style={{ flex: 1 }}>{staged.size} vorgemerkt</span>
             <button className="btn sm primary" onClick={() => void s.commitStaged()}>
               Übernehmen
             </button>
@@ -161,10 +244,7 @@ export function RightSidebar({ collapsed, auto }: { collapsed: boolean; auto: bo
         <div className="small" aria-live="polite">
           {selection.size ? `${selection.size.toLocaleString('de-DE')} ${selection.size === 1 ? 'Medium' : 'Medien'} ausgewählt` : 'Keine Medien ausgewählt'}
         </div>
-        <p className="hint" style={{ margin: '6px 0 8px' }}>
-          Klick auf ein Paket oder Taste 1–9 ordnet zu. Bei Mehrfachauswahl: teilweise → ergänzen, alle → entfernen. Strg+Z macht rückgängig.
-        </p>
-        <label className="field-label" htmlFor="qa-mode">
+        <label className="field-label" htmlFor="qa-mode" style={{ display: 'block', marginTop: 10 }}>
           Schnellzuordnung
         </label>
         <select id="qa-mode" className="select" style={{ marginTop: 5 }} value={settings!.quickAssign} onChange={(e) => void s.updateSettings({ quickAssign: e.target.value as QuickAssignMode })}>
@@ -186,7 +266,6 @@ export function RightSidebar({ collapsed, auto }: { collapsed: boolean; auto: bo
             <span className="warn">Kein globaler Ausgabeordner festgelegt</span>
           )}
         </div>
-        <div className="hint">Je Paket ein Unterordner; individuelle Paketziele im Paketmenü.</div>
         <button className="btn block" style={{ marginTop: 8 }} onClick={() => void chooseDirFlow('output')}>
           <FolderOutput size={15} /> Ausgabeordner wählen
         </button>

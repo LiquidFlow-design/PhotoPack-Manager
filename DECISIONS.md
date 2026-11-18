@@ -57,19 +57,34 @@ Jeder Punkt ist klein und kann auf Wunsch entfernt werden.
 6. Paketdots an jeder Kachel (gefüllt = exportiert, Ring = ausstehend), Badge „verschoben“ / „fehlt“ / „DUP“.
 7. Paket-Kürzel werden beim Neuvergeben automatisch getauscht statt abgelehnt.
 
-## D. Vorschläge für Folgeversionen (nicht umgesetzt – Freigabe erforderlich)
+## D. Version 2 – umgesetzte Vorschläge (freigegeben am 18.11.2026)
 
-| # | Vorschlag | Nutzen | Aufwand |
-|---|---|---|---|
-| D1 | **RAW+JPEG-Paare und XMP-Sidecars** gemeinsam behandeln (Zuordnung und Export als Einheit) | Fotografen-Workflow, keine verwaisten Sidecars | mittel |
-| D2 | **Kurze Gnadenfrist im Sofortmodus** (z. B. 3 s), in der Strg+Z die Übertragung vor dem Start verhindert | weniger Fehlübertragungen bei schnellem Arbeiten | gering |
-| D3 | **Wiederherstellungsbereich je Laufwerk** automatisch (z. B. `X:\.photopack-recovery`), damit Verschieben immer eine schnelle Umbenennung ist | deutlich schneller bei großen Videos | mittel (Berechtigungen, versteckte Ordner auf Nutzerlaufwerken) |
-| D4 | „**Projekt abschließen**“: alle gehaltenen Quellen eines Projekts in einem Schritt freigeben, mit Zusammenfassung | einfachere Aufräumphase | gering |
-| D5 | Visuelle Ähnlichkeit (perceptual hashing) für Beinahe-Duplikate | Serienbilder ausdünnen | mittel |
-| D6 | Wiederholen (Strg+Y) für Zuordnungen | Komfort | gering |
-| D7 | Bewertungen/Farbmarkierungen und Filter darauf | Vorauswahl vor Paketzuordnung | mittel |
-| D8 | Projekt-Sicherung/Export (Datenbankauszug je Projekt) und Import | Umzug auf anderen PC | mittel |
-| D9 | Zweitfenster/Vollbild-Vorschau für einen zweiten Monitor | Präsentation/Sichtung | mittel |
-| D10 | HEIC-Vorschau über den Windows-Codec (WIC) | iPhone-Fotos | mittel |
-| D11 | Export als ZIP je Paket | Weitergabe per Upload | gering |
-| D12 | LGPL-FFmpeg-Build statt GPL-Build bündeln | einfachere Lizenzlage | gering (Build-Pipeline) |
+| # | Umsetzung | Entscheidungen / Einschränkungen |
+|---|---|---|
+| D1 | **RAW+JPEG-Paare und XMP-Sidecars.** Paare: gleicher Ordner, gleicher Basisname, genau ein RAW und ein JPEG/HEIC. Sidecars: `NAME.xmp` oder `NAME.EXT.xmp` (bei Mehrdeutigkeit gehört die XMP zum RAW). Zuordnen/Entfernen/Bewerten wirkt auf beide Partner; Sidecars werden mitkopiert und mitverschoben. | Sidecars sind interne Medien (`role = 'sidecar'`) ohne eigene Kachel und laufen durch dieselbe abgesicherte Engine (Hash, Commit, Recovery). Ihr Zielname folgt dem geplanten Namen des Hauptmediums (`IMG (2).CR3` → `IMG (2).CR3.xmp`). Muss das Hauptmedium erst **zur Laufzeit** wegen einer neu aufgetauchten Datei umbenannt werden, behält die XMP ihren geplanten Namen. Beide Verhalten sind in den Einstellungen abschaltbar. |
+| D2 | **Startverzögerung im Sofortmodus** (Standard 3 s, 0–10 s): Aufträge starten erst danach; der Hinweis bietet „Rückgängig“. | Verzögerung ist im Auftrag gespeichert (`jobs.start_after`) und übersteht Neustarts. |
+| D3 | **Wiederherstellungsbereich je Laufwerk** (Windows): Liegt die Quelle auf einem anderen Laufwerk als der Standardbereich, wird `X:\.photopack-recovery\<Projekt>` (versteckt) verwendet – Verschieben ist eine Umbenennung. | Nicht für Netzwerkfreigaben und nicht bei individuell gesetztem Bereich. Kann der Ordner nicht angelegt werden, gilt der Standardbereich. Abschaltbar. Diese Ordner werden beim Indexieren immer übersprungen. |
+| D4 | **Projekt abschließen** im Wiederherstellungsdialog: alle gehaltenen Quellen in einem Schritt freigeben (mit Zusammenfassung). | Frist wie bei Einzelfreigabe. |
+| D5 | **Ähnliche Bilder** über 64-Bit-dHash aus dem Vorschaubild; Gruppierung per Hamming-Distanz (Streng 4 / Normal 8 / Locker 12). Reiter „Ähnlich“ im Duplikatdialog, Filter „Nur ähnliche Bilder“. | Keine Löschung. Vergleich aller Paare (12 000 Medien ≈ 72 Mio. Vergleiche) in Blöcken, damit die Oberfläche reagiert. |
+| D6 | **Wiederholen** mit Strg+Y bzw. Strg+Umschalt+Z. | |
+| D7 | **Bewertungen (0–5 Sterne) und Farbmarkierungen** (Rot, Gelb, Grün, Blau, Violett): Alt+0–5, Alt+6–9 (Rot/Gelb/Grün/Blau), Sterne/Farben in der Fokusansicht, Filter und Sortierung. | Nur in der Projektdatenbank gespeichert (kein Schreiben in XMP – Dateien bleiben unverändert). Das Windows-Menü (Alt) ist deaktiviert, damit Alt-Kürzel frei sind. |
+| D8 | **Projektsicherung** (`.ppmproj`, gzip-JSON) und **Import**. | Enthält Projekt, Quellen, Medien, Pakete inkl. Reihenfolge, Zuordnungen, Exportnachweise und Wiederherstellungseinträge – keine Mediendateien und keinen Auftragsverlauf. Existiert das Projekt bereits, wird der Import abgelehnt (sonst könnten zwei Projekte denselben Wiederherstellungsbereich verwalten). |
+| D9 | **Präsentationsfenster** (Kopfzeile): auf einem zweiten Bildschirm im Vollbild, folgt dem aktiven Medium; Pfeiltasten im Präsentationsfenster steuern das Hauptfenster, F/F11 Vollbild, Esc schließt. | |
+| D10 | **HEIC/HEIF-Vorschau unter Windows** über die Windows-Bildkomponente (WIC, PowerShell). | Benötigt die „HEIF-Bilderweiterungen“ aus dem Microsoft Store. **Nicht getestet** (kein Windows verfügbar). |
+| D11 | **ZIP-Export je Paket** (Paketmenü): Reihenfolge = Paketreihenfolge, Sidecars direkt hinter ihrem Medium, gleiche Namen → „Name (2)“, ohne Kompression (Medien sind bereits komprimiert), ZIP64 für große Archive. | Veränderte/fehlende Quellen werden übersprungen und gemeldet. Ersetzen einer vorhandenen ZIP nur nach Bestätigung im Speicherdialog. |
+| D12 | **LGPL-FFmpeg** statt GPL-Build: `scripts/fetch-ffmpeg-lgpl.mjs` lädt den LGPL-Build (gemeinsame DLLs) nach `vendor/ffmpeg/`, prüft die Lizenz und protokolliert die SHA-256; electron-builder liefert ihn unter `resources/ffmpeg` aus. `ffmpeg-static`/`ffprobe-static` sind nur noch Entwicklungsabhängigkeiten. | Der Download war in der Build-Umgebung nicht erlaubt (Zugriffsrichtlinie). Daher in dieser Sitzung **kein neuer Windows-Build**; `npm run dist:win` lädt FFmpeg automatisch. Für reproduzierbare Builds `FFMPEG_LGPL_URL` auf ein datiertes Release setzen. |
+
+## E. Paketansicht und eigene Reihenfolge (Wunsch vom 18.11.2026)
+
+* Augen-Symbol neben jedem Paket öffnet die **Paketansicht**: nur Medien dieses Pakets, Positionsnummer auf jeder Kachel.
+* **Eigene Reihenfolge** (Standard in der Paketansicht): Kacheln per **Drag & Drop** verschieben (Mehrfachauswahl wird gemeinsam verschoben), per Tastatur mit **Strg+Pfeil**. Andere Sortierungen (Name, Datum, Bewertung …) lassen sich mit „Als Reihenfolge übernehmen“ festschreiben.
+* Drag & Drop ist nur bei eigener Reihenfolge ohne aktive Filter möglich – sonst wäre die Zielposition mehrdeutig.
+* **Entf** entfernt die Auswahl aus dem Paket (rückgängig machbar). Neue Zuordnungen werden ans Ende angehängt.
+* Pakete selbst lassen sich in der Seitenleiste am Griff per Drag & Drop (oder Strg+Pfeil hoch/runter) umsortieren.
+* Die Reihenfolge wird im ZIP-Export und im Präsentationsfenster (Navigation) verwendet. Beim normalen Export in Ordner hat sie **keine** Auswirkung auf die Dateinamen (siehe Rückfrage im Bericht).
+
+## F. Vereinfachte Oberfläche
+
+Erklärtexte wurden entfernt bzw. gekürzt: rechte Seitenleiste (Zuordnungs- und Ausgabehinweise), Hinweise beim
+Umschalten auf Verschieben/Sofort, Infokasten der Exportvorschau, Duplikat- und Quellendialog, mehrere
+Einstellungsbeschreibungen. Warnungen und Fehler bleiben sichtbar.

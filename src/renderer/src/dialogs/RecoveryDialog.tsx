@@ -1,4 +1,4 @@
-import { FolderOpen, Info, RotateCcw } from 'lucide-react'
+import { CheckCheck, FolderOpen, RotateCcw } from 'lucide-react'
 import { useCallback, useEffect, useState } from 'react'
 import type { RecoveryOverview } from '@shared/types'
 import { api } from '../lib/api'
@@ -52,8 +52,28 @@ export function RecoveryDialog() {
       onClose={close}
       footer={
         <>
-          <button className="btn" style={{ marginRight: 'auto' }} onClick={() => void api.recovery.openFolder(project.id)}>
+          <button className="btn" onClick={() => void api.recovery.openFolder(project.id)}>
             <FolderOpen size={14} /> Ordner öffnen
+          </button>
+          <button
+            className="btn"
+            style={{ marginRight: 'auto' }}
+            disabled={!live.some((i) => i.status === 'held')}
+            onClick={() => {
+              const held = live.filter((i) => i.status === 'held')
+              useStore.getState().openDialog({
+                type: 'confirm',
+                title: 'Projekt abschließen',
+                message: `${held.length} gehaltene Datei(en) (${fmtBytes(held.reduce((a, i) => a + i.size, 0))}) freigeben. Sie werden nach Ablauf der Aufbewahrungsfrist (${o?.retentionDays} Tage ab Verschiebung, mindestens 1 Tag) automatisch gelöscht. Exportierte Dateien bleiben unberührt.`,
+                confirmLabel: 'Alle freigeben',
+                onConfirm: async () => {
+                  const r = await api.recovery.releaseAll(project.id)
+                  toast('success', `${r.count} Datei(en) freigegeben (${fmtBytes(r.bytes)}).`)
+                }
+              })
+            }}
+          >
+            <CheckCheck size={14} /> Projekt abschließen …
           </button>
           <button className="btn" disabled={!ids.length} onClick={() => void restore(false)}>
             <RotateCcw size={14} /> Am Originalort wiederherstellen
@@ -105,13 +125,9 @@ export function RecoveryDialog() {
         </>
       }
     >
-      <div className="callout info">
-        <Info size={16} />
-        <span>
-          Verschobene Quellen werden hier verifiziert aufbewahrt und dienen als Quelle für spätere Paketzuordnungen. Gehaltene Dateien werden nie automatisch gelöscht. Freigegebene Dateien werden nach{' '}
-          {o?.retentionDays ?? 30} Tagen nur bei laufender Anwendung bereinigt. Hinweis: Der Wiederherstellungsbereich schützt nicht vor Ausfall des Datenträgers.
-        </span>
-      </div>
+      <p className="hint" style={{ marginTop: 0 }}>
+        Gehaltene Dateien werden nie automatisch gelöscht; freigegebene nach {o?.retentionDays ?? 30} Tagen. Kein Schutz bei Datenträgerausfall.
+      </p>
       {o && (
         <div className="stat-grid">
           <div className="stat">
@@ -133,8 +149,9 @@ export function RecoveryDialog() {
         </div>
       )}
       <div className="row" style={{ justifyContent: 'space-between', marginBottom: 6 }}>
-        <span className="mono tiny faint ellipsis" title={o?.dir}>
+        <span className="mono tiny faint ellipsis" title={[o?.dir, ...(o?.extraDirs ?? [])].join('\n')}>
           {o?.dir}
+          {o?.extraDirs.length ? ` + ${o.extraDirs.join(', ')}` : ''}
         </span>
         <label className="check">
           <input type="checkbox" checked={showHistory} onChange={(e) => setShowHistory(e.target.checked)} /> Verlauf anzeigen

@@ -58,6 +58,7 @@ export interface PpmApi {
     presenterShow(mediaId: number | null): Promise<void>
     presenterNav(delta: number): Promise<void>
     presenterOpen(): Promise<boolean>
+    presenterCurrent(): Promise<number | null>
   }
   projects: {
     list(): Promise<ProjectSummary[]>
@@ -141,7 +142,7 @@ export interface PpmApi {
 
 /** Liste aller Methoden je Gruppe – Preload und Main leiten daraus Kanalnamen ab. */
 export const API_METHODS = {
-  app: ['startup', 'getSettings', 'updateSettings', 'clearThumbCache', 'openLogFolder', 'openPresenter', 'closePresenter', 'presenterShow', 'presenterNav', 'presenterOpen'],
+  app: ['startup', 'getSettings', 'updateSettings', 'clearThumbCache', 'openLogFolder', 'openPresenter', 'closePresenter', 'presenterShow', 'presenterNav', 'presenterOpen', 'presenterCurrent'],
   projects: [
     'list',
     'create',

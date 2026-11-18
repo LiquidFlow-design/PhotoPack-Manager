@@ -13,6 +13,7 @@ import type {
   AppEvent,
   AppSettings,
   AssignmentDelta,
+  ColorLabel,
   FilterState,
   JobSummary,
   MediaRow,
@@ -43,6 +44,7 @@ export interface Toast {
   id: number
   level: 'info' | 'warn' | 'error' | 'success'
   text: string
+  action?: { label: string; run: () => void }
 }
 
 interface State {
@@ -61,6 +63,9 @@ interface State {
   thumbVersion: Map<number, number>
   filters: FilterState
   sort: SortState
+  pkgSort: SortState // Sortierung in der Paketansicht
+  packageView: string | null
+  packageOrder: number[] // Reihenfolge des geöffneten Pakets (Medien-IDs)
   sourceId: string | null
   view: 'grid' | 'focus'
   visible: MediaRow[]
@@ -72,6 +77,8 @@ interface State {
   scrollSeq: number // erhöht, wenn das aktive Element sichtbar gescrollt werden soll (Tastatur)
   staged: Set<string>
   undoStack: AssignmentDelta[]
+  redoStack: AssignmentDelta[]
+  presenterOpen: boolean
   jobs: JobSummary[]
   tasks: Record<string, TaskProgress>
   toasts: Toast[]
@@ -108,7 +115,18 @@ interface Actions {
   undo(): Promise<void>
   updateProject(patch: Partial<Pick<Project, 'workMode' | 'operation' | 'conflictPolicy'>>): Promise<void>
   updateSettings(patch: Partial<AppSettings>): Promise<void>
-  toast(level: Toast['level'], text: string): void
+  toast(level: Toast['level'], text: string, action?: Toast['action']): void
+  redo(): Promise<void>
+  openPackageView(id: string): Promise<void>
+  closePackageView(): void
+  refreshPackageOrder(): Promise<void>
+  reorderInPackage(ids: number[], targetId: number, after: boolean): Promise<void>
+  moveSelectionInPackage(delta: number): Promise<void>
+  adoptSortAsOrder(): Promise<void>
+  removeSelectionFromPackage(): Promise<void>
+  setRating(rating: number): Promise<void>
+  toggleColor(color: ColorLabel): Promise<void>
+  togglePresenter(): Promise<void>
   dismissToast(id: number): void
   openDialog(d: DialogState): void
   closeDialog(): void
@@ -126,12 +144,21 @@ let jobsTimer: ReturnType<typeof setTimeout> | null = null
 export const useStore = create<State & Actions>((set, get) => {
   function recompute(partial: Partial<State> = {}): Partial<State> {
     const s = { ...get(), ...partial }
-    const visible = filterAndSort(s.media, s.filters, s.sort, {
-      assignments: s.assignments,
-      exported: s.exported,
-      allPackageIds: s.packages.map((p) => p.id),
-      sourceId: s.sourceId
-    })
+    const pv = s.packageView
+    const base = pv ? s.media.filter((m) => s.assignments.get(m.id)?.has(pv)) : s.media
+    const order = pv ? new Map(s.packageOrder.map((id, i) => [id, i])) : undefined
+    const visible = filterAndSort(
+      base,
+      s.filters,
+      pv ? s.pkgSort : s.sort,
+      {
+        assignments: s.assignments,
+        exported: s.exported,
+        allPackageIds: s.packages.map((p) => p.id),
+        sourceId: pv ? null : s.sourceId
+      },
+      order
+    )
     const visibleIndex = new Map<number, number>()
     visible.forEach((m, i) => visibleIndex.set(m.id, i))
     return { ...partial, visible, visibleIndex, version: s.version + 1 }
@@ -142,7 +169,7 @@ export const useStore = create<State & Actions>((set, get) => {
     saveTimer = setTimeout(() => {
       const s = get()
       if (!s.project) return
-      void api.projects.saveUi(s.project.id, { filters: s.filters, sort: s.sort, sourceId: s.sourceId, view: s.view }).catch(() => {})
+      void api.projects.saveUi(s.project.id, { filters: s.filters, sort: s.sort, sourceId: s.sourceId, view: s.view, packageView: null }).catch(() => {})
     }, 400)
   }
 
@@ -158,6 +185,19 @@ export const useStore = create<State & Actions>((set, get) => {
     const s = get()
     const next = nextAfter(s.selection)
     if (next != null) set({ selection: new Set([next]), anchor: next, active: next, scrollSeq: s.scrollSeq + 1 })
+  }
+
+  async function saveOrder(order: number[]): Promise<void> {
+    const s = get()
+    if (!s.packageView) return
+    set(recompute({ packageOrder: order }))
+    try {
+      const r = await api.packages.reorderMedia(s.packageView, order)
+      if (get().packageView === s.packageView) set(recompute({ packageOrder: r }))
+    } catch (e) {
+      get().toast('error', 'Reihenfolge konnte nicht gespeichert werden: ' + (e as Error).message)
+      await get().refreshPackageOrder()
+    }
   }
 
   return {
@@ -176,6 +216,9 @@ export const useStore = create<State & Actions>((set, get) => {
     thumbVersion: new Map(),
     filters: DEFAULT_FILTERS,
     sort: DEFAULT_SORT,
+    pkgSort: { key: 'custom', dir: 'asc' },
+    packageView: null,
+    packageOrder: [],
     sourceId: null,
     view: 'grid',
     visible: [],
@@ -187,6 +230,8 @@ export const useStore = create<State & Actions>((set, get) => {
     scrollSeq: 0,
     staged: new Set(),
     undoStack: [],
+    redoStack: [],
+    presenterOpen: false,
     jobs: [],
     tasks: {},
     toasts: [],
@@ -214,7 +259,7 @@ export const useStore = create<State & Actions>((set, get) => {
         const assignments = buildIndex(b.assignments)
         const exported = buildIndex(b.exported)
         const mediaById = new Map(b.media.map((m) => [m.id, m]))
-        set({ undoStack: [], selection: new Set(), anchor: null, active: null, staged: new Set(), tasks: {} })
+        set({ undoStack: [], redoStack: [], selection: new Set(), anchor: null, active: null, staged: new Set(), tasks: {}, packageView: null, packageOrder: [] })
         set(
           recompute({
             project: b.project,
@@ -309,11 +354,15 @@ export const useStore = create<State & Actions>((set, get) => {
       scheduleUiSave()
     },
     setSort(s) {
+      if (get().packageView) {
+        set(recompute({ pkgSort: s }))
+        return
+      }
       set(recompute({ sort: s }))
       scheduleUiSave()
     },
     setSourceFilter(id) {
-      set(recompute({ sourceId: id }))
+      set(recompute({ sourceId: id, packageView: null, packageOrder: [] }))
       scheduleUiSave()
     },
     setView(v) {
@@ -411,10 +460,12 @@ export const useStore = create<State & Actions>((set, get) => {
       set(recompute({ assignments: idx }))
       try {
         const r = await api.assign.apply(s.project.id, delta)
-        if (opts.recordUndo && !isEmptyDelta(r.delta)) set({ undoStack: [...get().undoStack.slice(-99), r.delta] })
+        if (opts.recordUndo && !isEmptyDelta(r.delta)) set({ undoStack: [...get().undoStack.slice(-99), r.delta], redoStack: [] })
         for (const n of r.notices) get().toast(n.startsWith('Sofortauftrag nicht') ? 'warn' : 'info', n)
-        if (r.jobId && !opts.quiet) get().toast('info', 'Sofortauftrag angelegt – läuft im Hintergrund.')
+        const delay = get().settings?.instantDelaySec ?? 0
+        if (r.jobId && !opts.quiet && delay > 0) get().toast('info', `Übertragung startet in ${delay} s`, { label: 'Rückgängig', run: () => void get().undo() })
         void get().refreshPackages()
+        if (get().packageView) void get().refreshPackageOrder()
         return true
       } catch (e) {
         get().toast('error', 'Zuordnung fehlgeschlagen: ' + (e as Error).message)
@@ -426,15 +477,130 @@ export const useStore = create<State & Actions>((set, get) => {
     async undo() {
       const stack = get().undoStack
       const last = stack[stack.length - 1]
-      if (!last) {
-        get().toast('info', 'Nichts rückgängig zu machen.')
-        return
-      }
+      if (!last) return
       set({ undoStack: stack.slice(0, -1) })
       const ok = await get().applyDelta(invertDelta(last), { quiet: true })
-      if (ok) {
-        const n = last.added.length + last.removed.length
-        get().toast('info', `Zuordnungsänderung rückgängig gemacht (${n}). Bereits übertragene Dateien bleiben unverändert.`)
+      if (ok) set({ redoStack: [...get().redoStack, last] })
+    },
+
+    async redo() {
+      const stack = get().redoStack
+      const last = stack[stack.length - 1]
+      if (!last) return
+      set({ redoStack: stack.slice(0, -1) })
+      const ok = await get().applyDelta(last, { quiet: true })
+      if (ok) set({ undoStack: [...get().undoStack, last] })
+    },
+
+    async openPackageView(id) {
+      const order = await api.packages.order(id)
+      set({ selection: new Set(), anchor: null, filterOpen: false })
+      set(recompute({ packageView: id, packageOrder: order, view: 'grid' }))
+      const first = get().visible[0]
+      if (first) set({ active: first.id, anchor: first.id, selection: new Set([first.id]), scrollSeq: get().scrollSeq + 1 })
+    },
+
+    closePackageView() {
+      set(recompute({ packageView: null, packageOrder: [] }))
+      set({ scrollSeq: get().scrollSeq + 1 })
+    },
+
+    async refreshPackageOrder() {
+      const pv = get().packageView
+      if (!pv) return
+      if (!get().packages.some((p) => p.id === pv)) {
+        get().closePackageView()
+        return
+      }
+      const order = await api.packages.order(pv)
+      if (get().packageView === pv) set(recompute({ packageOrder: order }))
+    },
+
+    async reorderInPackage(ids, targetId, after) {
+      const cur = get().packageOrder
+      const moving = new Set(ids)
+      if (moving.has(targetId)) return
+      const ordered = cur.filter((id) => moving.has(id))
+      const rest = cur.filter((id) => !moving.has(id))
+      let at = rest.indexOf(targetId)
+      if (at < 0) return
+      if (after) at++
+      await saveOrder([...rest.slice(0, at), ...ordered, ...rest.slice(at)])
+    },
+
+    async moveSelectionInPackage(delta) {
+      const s = get()
+      if (!s.packageView || !s.selection.size || !delta) return
+      const cur = s.packageOrder
+      const block = cur.filter((id) => s.selection.has(id))
+      if (!block.length) return
+      const rest = cur.filter((id) => !s.selection.has(id))
+      const first = cur.indexOf(block[0])
+      const restBefore = cur.slice(0, first).filter((id) => !s.selection.has(id)).length
+      const pos = Math.max(0, Math.min(rest.length, restBefore + delta))
+      if (pos === restBefore) return
+      await saveOrder([...rest.slice(0, pos), ...block, ...rest.slice(pos)])
+      set({ scrollSeq: get().scrollSeq + 1 })
+    },
+
+    async adoptSortAsOrder() {
+      const s = get()
+      if (!s.packageView) return
+      const visibleIds = s.visible.map((m) => m.id)
+      const rest = s.packageOrder.filter((id) => !s.visibleIndex.has(id))
+      set({ pkgSort: { key: 'custom', dir: 'asc' } })
+      await saveOrder([...visibleIds, ...rest])
+    },
+
+    async removeSelectionFromPackage() {
+      const s = get()
+      if (!s.packageView || !s.selection.size) return
+      const pv = s.packageView
+      await get().applyDelta({ added: [], removed: [...s.selection].map((id) => [id, pv] as [number, string]) }, { recordUndo: true })
+    },
+
+    async setRating(rating) {
+      const s = get()
+      if (!s.project || !s.selection.size) return
+      try {
+        const ids = await api.media.setRating(s.project.id, [...s.selection], rating)
+        const mediaById = new Map(get().mediaById)
+        for (const id of ids) {
+          const m = mediaById.get(id)
+          if (m) mediaById.set(id, { ...m, rating })
+        }
+        set(recompute({ mediaById, media: get().media.map((m) => mediaById.get(m.id) ?? m) }))
+      } catch (e) {
+        get().toast('error', (e as Error).message)
+      }
+    },
+
+    async toggleColor(color) {
+      const s = get()
+      if (!s.project || !s.selection.size) return
+      const all = [...s.selection].every((id) => s.mediaById.get(id)?.colorLabel === color)
+      const value = all ? null : color
+      try {
+        const ids = await api.media.setColor(s.project.id, [...s.selection], value)
+        const mediaById = new Map(get().mediaById)
+        for (const id of ids) {
+          const m = mediaById.get(id)
+          if (m) mediaById.set(id, { ...m, colorLabel: value })
+        }
+        set(recompute({ mediaById, media: get().media.map((m) => mediaById.get(m.id) ?? m) }))
+      } catch (e) {
+        get().toast('error', (e as Error).message)
+      }
+    },
+
+    async togglePresenter() {
+      if (get().presenterOpen) {
+        await api.app.closePresenter()
+        set({ presenterOpen: false })
+      } else {
+        await api.app.presenterShow(get().active)
+        await api.app.openPresenter()
+        set({ presenterOpen: true })
       }
     },
 
@@ -447,10 +613,8 @@ export const useStore = create<State & Actions>((set, get) => {
         set({ project: { ...project, ui: get().project!.ui } })
         if (patch.workMode === 'instant' && prev.workMode === 'collect') {
           const pending = get().packages.reduce((a, x) => a + x.pendingCount, 0)
-          if (pending) get().toast('info', `Sofortmodus aktiv. ${pending} vorgemerkte Zuordnung(en) bleiben im Sammelexport und werden nicht automatisch übertragen.`)
-          else get().toast('info', 'Sofortmodus aktiv: neue Zuordnungen werden sofort übertragen.')
+          if (pending) get().toast('info', `${pending} vorgemerkte Zuordnung(en) bleiben im Sammelexport.`)
         }
-        if (patch.operation === 'move') get().toast('info', 'Verschieben: Quellen werden erst nach verifizierten Zielkopien in den Wiederherstellungsbereich verschoben.')
       } catch (e) {
         get().toast('error', (e as Error).message)
       }
@@ -461,9 +625,9 @@ export const useStore = create<State & Actions>((set, get) => {
       set({ settings })
     },
 
-    toast(level, text) {
+    toast(level, text, action) {
       const id = ++toastSeq
-      set({ toasts: [...get().toasts.slice(-4), { id, level, text }] })
+      set({ toasts: [...get().toasts.slice(-4), { id, level, text, action }] })
       setTimeout(() => get().dismissToast(id), level === 'error' ? 9000 : level === 'warn' ? 7000 : 4000)
     },
     dismissToast(id) {
@@ -481,6 +645,15 @@ export const useStore = create<State & Actions>((set, get) => {
 
     handleEvent(e) {
       const s = get()
+      if (e.type === 'presenter-nav') {
+        get().navigate(e.delta)
+        return
+      }
+      if (e.type === 'presenter-closed') {
+        set({ presenterOpen: false })
+        return
+      }
+      if (e.type === 'presenter-show') return
       if (e.type === 'theme-changed') {
         set({ darkSystem: e.dark })
         return
@@ -508,9 +681,11 @@ export const useStore = create<State & Actions>((set, get) => {
           break
         case 'packages-changed':
           void get().refreshPackages()
+          if (get().packageView) void get().refreshPackageOrder()
           break
         case 'assignments-changed':
           void get().refreshAssignments()
+          if (get().packageView) void get().refreshPackageOrder()
           break
         case 'sources-changed':
           void get().refreshSources()
@@ -538,3 +713,16 @@ export function isDark(settings: AppSettings | null, darkSystem: boolean): boole
   const t = settings?.theme ?? 'system'
   return t === 'dark' || (t === 'system' && darkSystem)
 }
+
+// Präsentationsfenster folgt dem aktiven Medium
+let lastShown: number | null | undefined
+useStore.subscribe((s) => {
+  if (!s.presenterOpen) {
+    lastShown = undefined
+    return
+  }
+  if (s.active !== lastShown) {
+    lastShown = s.active
+    void api.app.presenterShow(s.active)
+  }
+})

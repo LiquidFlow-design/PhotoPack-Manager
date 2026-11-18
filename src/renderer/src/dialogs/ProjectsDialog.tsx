@@ -1,4 +1,4 @@
-import { FolderOpen, FolderPlus, Pencil, Trash2 } from 'lucide-react'
+import { Download, FolderOpen, FolderPlus, Pencil, Trash2, Upload } from 'lucide-react'
 import { useEffect } from 'react'
 import { api } from '../lib/api'
 import { fmtDate } from '../lib/format'
@@ -33,14 +33,29 @@ export function ProjectsDialog() {
       title="Projekte"
       onClose={close}
       footer={
-        <button className="btn primary" onClick={create}>
-          <FolderPlus size={14} /> Neues Projekt
-        </button>
+        <>
+          <button
+            className="btn"
+            style={{ marginRight: 'auto' }}
+            onClick={async () => {
+              try {
+                const r = await api.projects.importBackup()
+                if (!r) return
+                await useStore.getState().refreshProjects()
+                useStore.getState().toast('success', `Projekt „${r.name}“ importiert (${r.media} Dateien).`)
+              } catch (e) {
+                useStore.getState().toast('error', (e as Error).message)
+              }
+            }}
+          >
+            <Upload size={14} /> Sicherung importieren …
+          </button>
+          <button className="btn primary" onClick={create}>
+            <FolderPlus size={14} /> Neues Projekt
+          </button>
+        </>
       }
     >
-      <p className="hint" style={{ marginTop: 0 }}>
-        Projekte werden automatisch gespeichert und können jederzeit fortgesetzt werden.
-      </p>
       {projects.length === 0 && <p className="muted">Noch keine Projekte.</p>}
       {projects.map((p) => (
         <div key={p.id} className={'list-row' + (current?.id === p.id ? ' current' : '')}>
@@ -63,6 +78,21 @@ export function ProjectsDialog() {
               <FolderOpen size={13} /> Öffnen
             </button>
           )}
+          <button
+            className="icon-btn ghost sm"
+            aria-label={`${p.name} sichern`}
+            title="Projekt sichern (.ppmproj)"
+            onClick={async () => {
+              try {
+                const r = await api.projects.exportBackup(p.id)
+                if (r) useStore.getState().toast('success', `Gesichert: ${r.file}`)
+              } catch (e) {
+                useStore.getState().toast('error', (e as Error).message)
+              }
+            }}
+          >
+            <Download size={14} />
+          </button>
           <button
             className="icon-btn ghost sm"
             aria-label={`${p.name} umbenennen`}

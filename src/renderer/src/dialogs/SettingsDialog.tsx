@@ -18,7 +18,7 @@ export function SettingsDialog() {
       <div className="setting-row">
         <div>
           <div>Farbschema</div>
-          <div className="desc">„System“ folgt Windows. Eine manuelle Wahl hat Vorrang.</div>
+          
         </div>
         <div className="segmented" role="radiogroup" aria-label="Farbschema">
           {(['system', 'light', 'dark'] as const).map((t) => (
@@ -31,7 +31,7 @@ export function SettingsDialog() {
       <div className="setting-row">
         <div>
           <div>Animationen</div>
-          <div className="desc">„System“ beachtet die Windows-Einstellung „Animationen anzeigen“.</div>
+          
         </div>
         <select className="select" style={{ width: 170 }} aria-label="Animationen" value={settings.reducedMotion} onChange={(e) => up({ reducedMotion: e.target.value as AppSettings['reducedMotion'] })}>
           <option value="system">System</option>
@@ -53,7 +53,7 @@ export function SettingsDialog() {
       <div className="setting-row">
         <div>
           <div>Schnellzuordnung</div>
-          <div className="desc">Verhalten nach Paketzuordnung per Klick oder Taste.</div>
+          
         </div>
         <select className="select" style={{ width: 230 }} aria-label="Schnellzuordnung" value={settings.quickAssign} onChange={(e) => up({ quickAssign: e.target.value as AppSettings['quickAssign'] })}>
           <option value="stay">Bild bleibt geöffnet</option>
@@ -64,9 +64,37 @@ export function SettingsDialog() {
       <div className="setting-row">
         <div>
           <div>Tastenkürzel 1–9</div>
-          <div className="desc">Kürzel je Paket im Paketmenü konfigurierbar. Während Texteingaben deaktiviert.</div>
+          
         </div>
         <input type="checkbox" aria-label="Tastenkürzel aktiv" checked={settings.shortcutsEnabled} onChange={(e) => up({ shortcutsEnabled: e.target.checked })} />
+      </div>
+
+      <div className="setting-row">
+        <div>
+          <div>RAW+JPEG gemeinsam</div>
+          <div className="desc">Paare gleichen Namens zusammen zuordnen und bewerten.</div>
+        </div>
+        <input type="checkbox" aria-label="RAW und JPEG gemeinsam" checked={settings.pairRawJpeg} onChange={(e) => up({ pairRawJpeg: e.target.checked })} />
+      </div>
+      <div className="setting-row">
+        <div>
+          <div>XMP-Sidecars mitnehmen</div>
+          <div className="desc">Beim Kopieren und Verschieben.</div>
+        </div>
+        <input type="checkbox" aria-label="XMP-Sidecars mitnehmen" checked={settings.includeSidecars} onChange={(e) => up({ includeSidecars: e.target.checked })} />
+      </div>
+      <div className="setting-row">
+        <div>
+          <div>Startverzögerung im Sofortmodus</div>
+          <div className="desc">Zeit für Strg+Z, bevor übertragen wird.</div>
+        </div>
+        <select className="select" style={{ width: 120 }} aria-label="Startverzögerung" value={settings.instantDelaySec} onChange={(e) => up({ instantDelaySec: Number(e.target.value) })}>
+          {[0, 2, 3, 5, 10].map((n) => (
+            <option key={n} value={n}>
+              {n ? `${n} s` : 'Aus'}
+            </option>
+          ))}
+        </select>
       </div>
 
       <div className="h-section" style={{ marginTop: 16 }}>
@@ -75,7 +103,7 @@ export function SettingsDialog() {
       <div className="setting-row">
         <div>
           <div>Aufbewahrungsdauer</div>
-          <div className="desc">Freigegebene Dateien im Wiederherstellungsbereich werden danach bei laufender Anwendung gelöscht. Gehaltene nie.</div>
+          <div className="desc">Für freigegebene Dateien.</div>
         </div>
         <div className="row">
           <input
@@ -101,7 +129,7 @@ export function SettingsDialog() {
             <div className="desc mono ellipsis" title={project.recoveryDir}>
               {project.recoveryDir}
             </div>
-            <div className="desc">Am schnellsten auf demselben Laufwerk wie die Quellen (Verschieben ohne Kopie). Änderbar, solange der Bereich leer ist.</div>
+            <div className="desc">Änderbar, solange der Bereich leer ist.</div>
           </div>
           <div className="row">
             <button
@@ -137,8 +165,26 @@ export function SettingsDialog() {
       )}
       <div className="setting-row">
         <div>
+          <div>Wiederherstellungsbereich je Laufwerk</div>
+          <div className="desc">Verschieben ohne Kopie: versteckter Ordner „.photopack-recovery“ auf dem Laufwerk der Quelle.</div>
+        </div>
+        <input type="checkbox" aria-label="Wiederherstellungsbereich je Laufwerk" checked={settings.recoveryPerVolume} onChange={(e) => up({ recoveryPerVolume: e.target.checked })} />
+      </div>
+      <div className="setting-row">
+        <div>
+          <div>Ähnliche Bilder</div>
+          <div className="desc">Empfindlichkeit der Ähnlichkeitssuche.</div>
+        </div>
+        <select className="select" style={{ width: 150 }} aria-label="Ähnlichkeit" value={settings.similarityThreshold} onChange={(e) => up({ similarityThreshold: Number(e.target.value) })}>
+          <option value={4}>Streng</option>
+          <option value={8}>Normal</option>
+          <option value={12}>Locker</option>
+        </select>
+      </div>
+      <div className="setting-row">
+        <div>
           <div>Exakte Duplikaterkennung</div>
-          <div className="desc">Gleiche Größe + SHA-256. Läuft nach jeder Indexierung. Keine automatische Löschung.</div>
+          <div className="desc">Automatisch nach jeder Indexierung.</div>
         </div>
         <input type="checkbox" aria-label="Duplikaterkennung aktiv" checked={settings.duplicateDetection} onChange={(e) => up({ duplicateDetection: e.target.checked })} />
       </div>
@@ -149,7 +195,7 @@ export function SettingsDialog() {
       <div className="setting-row">
         <div>
           <div>Vorschau-Cache</div>
-          <div className="desc">Vorschaubilder werden bei Bedarf neu erzeugt.</div>
+          
         </div>
         <button className="btn sm" onClick={() => void api.app.clearThumbCache().then(() => s.toast('info', 'Vorschau-Cache geleert.'))}>
           Cache leeren

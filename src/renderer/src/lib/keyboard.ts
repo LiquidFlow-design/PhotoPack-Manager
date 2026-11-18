@@ -37,6 +37,27 @@ export function useKeyboard(): void {
         void s.undo()
         return
       }
+      if (ctrl && (e.key.toLowerCase() === 'y' || (e.key.toLowerCase() === 'z' && e.shiftKey))) {
+        e.preventDefault()
+        void s.redo()
+        return
+      }
+      // Paketansicht: Strg+Pfeil verschiebt die Auswahl in der Reihenfolge
+      if (ctrl && s.packageView && s.view === 'grid' && ['ArrowLeft', 'ArrowRight', 'ArrowUp', 'ArrowDown'].includes(e.key)) {
+        e.preventDefault()
+        const step = e.key === 'ArrowLeft' ? -1 : e.key === 'ArrowRight' ? 1 : e.key === 'ArrowUp' ? -s.columns : s.columns
+        void s.moveSelectionInPackage(step)
+        return
+      }
+      // Alt+0–5: Bewertung, Alt+6–9: Farbmarkierung (umschalten)
+      const altDigit = e.altKey && !ctrl ? (/^(?:Digit|Numpad)([0-9])$/.exec(e.code)?.[1] ?? null) : null
+      if (altDigit != null) {
+        e.preventDefault()
+        const n = Number(altDigit)
+        if (n <= 5) void s.setRating(n)
+        else void s.toggleColor((['red', 'yellow', 'green', 'blue'] as const)[n - 6])
+        return
+      }
       if (ctrl && e.key.toLowerCase() === 'f') {
         e.preventDefault()
         document.getElementById('media-search')?.focus()
@@ -49,6 +70,7 @@ export function useKeyboard(): void {
         else if (s.staged.size) useStore.setState({ staged: new Set() })
         else if (s.view === 'focus') s.setView('grid')
         else if (s.selection.size > 1 && s.active != null) s.select(s.active, 'single')
+        else if (s.packageView) s.closePackageView()
         return
       }
 
@@ -88,6 +110,12 @@ export function useKeyboard(): void {
           if (inControl || s.view !== 'grid') return
           e.preventDefault()
           s.navigate(-s.columns, e.shiftKey)
+          break
+        case 'Delete':
+          if (s.packageView && s.selection.size) {
+            e.preventDefault()
+            void s.removeSelectionFromPackage()
+          }
           break
         case 'Home':
           e.preventDefault()

@@ -1,4 +1,4 @@
-import { ChevronDown, FolderKanban, Images, Monitor, Moon, Settings, Sun } from 'lucide-react'
+import { ChevronDown, FolderKanban, Images, Monitor, Presentation, Moon, Settings, Sun } from 'lucide-react'
 import { useStore } from '../state/store'
 
 const THEME_NEXT = { system: 'light', light: 'dark', dark: 'system' } as const
@@ -8,6 +8,7 @@ export function Header() {
   const project = useStore((s) => s.project)
   const settings = useStore((s) => s.settings)
   const openDialog = useStore((s) => s.openDialog)
+  const presenterOpen = useStore((s) => s.presenterOpen)
   const theme = settings?.theme ?? 'system'
   const ThemeIcon = theme === 'system' ? Monitor : theme === 'light' ? Sun : Moon
 
@@ -31,6 +32,17 @@ export function Header() {
         </button>
       </div>
       <div className="row">
+        {project && (
+          <button
+            className={'icon-btn' + (presenterOpen ? ' active' : '')}
+            title="Präsentationsfenster (zweiter Bildschirm)"
+            aria-label="Präsentationsfenster"
+            aria-pressed={presenterOpen}
+            onClick={() => void useStore.getState().togglePresenter()}
+          >
+            <Presentation size={17} />
+          </button>
+        )}
         <button
           className="icon-btn"
           title={`Farbschema: ${THEME_LABEL[theme]} (klicken zum Wechseln)`}

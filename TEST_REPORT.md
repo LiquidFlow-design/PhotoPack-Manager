@@ -1,6 +1,6 @@
 # Testbericht
 
-**Stand:** 18.11.2026 · Version 1.0.0-beta.1
+**Stand:** 18.11.2026 · Version 1.0.0-beta.1 + Version-2-Funktionen
 **Umgebung der Testläufe:** Linux x64 (Ubuntu 24.04, Container), Node.js 22.23, Electron 44.11,
 Chromium-Rendering unter Xvfb (Software-Rendering, keine GPU). **Nicht** auf einem echten Windows-System
 ausgeführt – siehe „Nicht geprüft“.
@@ -12,13 +12,12 @@ generierte Dateien in temporären Ordnern.
 
 | Suite | Befehl | Ergebnis |
 |---|---|---|
-| Unit + Integration (Vitest) | `npm test` | **86 / 86 bestanden** (9 Dateien) |
-| Electron-E2E (Playwright) | `npm run test:e2e` | **10 / 10 bestanden** (2 Wiederholungsläufe stabil) |
-| UI-Leistung 12 000 Medien (Playwright) | `npx playwright test perf` | bestanden |
-| Skalierung 12 000 Medien (Vitest) | `npm run test:perf` | **6 / 6 bestanden** |
+| Unit + Integration (Vitest) | `npm test` | **101 / 101 bestanden** (10 Dateien) |
+| Electron-E2E (Playwright) | `npm run test:e2e` | **17 / 17 bestanden** (Kern 10, Version 2 6, UI-Leistung 1) |
+| Skalierung 12 000 Medien (Vitest) | `npm run test:perf` | **7 / 7 bestanden** |
 | Typprüfung | `npm run typecheck` | fehlerfrei (Main, Renderer, E2E) |
 | Gepackte App (Linux-Variante desselben asar-Layouts) | `node scripts/smoke.mjs … release/linux-unpacked/photopack-manager` | Start, Indexierung, Vorschauen (Bild/Video), Decoder-Status ok |
-| Windows-Build | `electron-builder --win portable zip --x64` | portable EXE + ZIP erzeugt; **NSIS-Installer nicht** (Wine-Absturz in der Build-Umgebung) |
+| Windows-Build | `electron-builder --win portable zip --x64` | Stand Version 1: portable EXE + ZIP erzeugt; NSIS nicht (Wine-Absturz). **Version 2 nicht neu gebaut**: Der Download des LGPL-FFmpeg wurde in dieser Umgebung durch die Zugriffsrichtlinie blockiert. |
 
 ## 2. Abdeckung der Pflicht-Testfälle (Auftrag §9)
 
@@ -43,6 +42,27 @@ generierte Dateien in temporären Ordnern.
 | Recovery-Wiederherstellung, 30-Tage-Ablauf, sichere Bereinigung | `recovery.test.ts` (8 Tests: Original-/Alternativpfad, Konflikt, gehaltene nie bereinigt, Ablauf 29/31 Tage, Mindestfrist, Protokoll) | ✓ |
 | 10k+ synthetische Medien, UI-Reaktionsfähigkeit, Cache-Verhalten | `tests/perf/scale.test.ts`, `tests/e2e/perf.spec.ts`; Cache-Invalidierung in `media-tools.test.ts` | ✓ |
 
+**Version 2 (`tests/integration/features-v2.test.ts`, `tests/e2e/features.spec.ts`)**
+
+| Funktion | Test(s) | Status |
+|---|---|---|
+| Sidecars (`IMG.xmp`, `IMG.CR3.xmp`), verwaiste XMP ignoriert | „erkennt Sidecars …“ | ✓ |
+| RAW+JPEG-Paare: gemeinsame Zuordnung/Entfernung, Export inkl. Sidecar, Sidecar-Name folgt umbenanntem Hauptmedium | 3 Integrationstests + E2E „RAW+JPEG-Paar …“ | ✓ |
+| Sidecars beim Verschieben im Wiederherstellungsbereich | „Verschieben nimmt Sidecars mit …“ | ✓ |
+| Paketreihenfolge: anhängen, umsortieren, persistent nach Neustart | „neue Zuordnungen werden angehängt …“ | ✓ |
+| Paketansicht, **Drag & Drop**, Strg+Pfeil, Sortierung übernehmen, Entf, Strg+Z/Strg+Y | E2E „Paketansicht …“ | ✓ |
+| Pakete in der Seitenleiste umsortieren (Tastatur) | E2E „Pakete per Tastatur …“ | ✓ (Drag & Drop der Pakete nur manuell im Screenshot-Lauf, nicht automatisiert) |
+| ZIP-Export: Reihenfolge, Namenskollision, Sidecar, Integrität (`unzip -t`), veränderte Quelle übersprungen | „ZIP-Export folgt der Paketreihenfolge …“ | ✓ |
+| Bewertungen/Farben inkl. Paarpartner; Tastatur Alt+4/Alt+6; Filter | Integration + E2E | ✓ |
+| Projektsicherung: Export, Import in frische Datenbank (IDs neu, Reihenfolge, Exporte, Recovery), Doppelimport abgelehnt, defekte Datei | 2 Tests | ✓ |
+| Wiederherstellungsbereich je Laufwerk (Pfadwahl für Windows simuliert) | „wählt unter Windows …“ | ✓ (Logik); echtes Verschieben auf Windows-Laufwerke **nicht getestet** |
+| Projekt abschließen | „gibt alle gehaltenen Quellen frei“ | ✓ |
+| Ähnliche Bilder (gleiches Motiv in anderer Größe/Qualität gruppiert, anderes Motiv nicht) | „gruppiert visuell ähnliche Bilder …“ | ✓ |
+| Startverzögerung im Sofortmodus, Rückgängig innerhalb der Frist | „Sofortmodus-Gnadenfrist …“ | ✓ |
+| Präsentationsfenster folgt Auswahl, Navigation zurück ins Hauptfenster | E2E „Präsentationsfenster …“ | ✓ (ein Bildschirm; Vollbild auf zweitem Monitor nicht prüfbar) |
+| HEIC über WIC (Windows) | – | **nicht getestet** |
+| LGPL-FFmpeg-Bezug | – | **nicht ausgeführt** (Download blockiert); Entwicklung/Tests nutzen weiterhin ffmpeg-static |
+
 Weitere Tests: Indexierung (Formate, Ausschluss von Ausgabeordnern in der Quelle, Symlink-Schleifen,
 Re-Scan neu/geändert/fehlend, nicht erreichbare Quelle), Quellprüfung (verschachtelt, in Ausgabe/Recovery),
 Paketverwaltung (Namenskonflikte, Kürzeltausch, Löschen ohne Dateiverlust), Migrationen (WAL, Fremdschlüssel),
@@ -63,9 +83,10 @@ Einzelmessungen; auf Windows mit NTFS, Virenscanner und echten Mediengrößen si
 | Medienliste aus SQLite laden | 9 ms (≈ 3,7 MB als JSON) |
 | Filtern + Sortieren (alle, nach Name) | 22 ms |
 | Filtern (Typ + Suche) + Sortieren nach Größe | 5 ms |
-| 15 000 Zuordnungen speichern | 46 ms |
+| 15 000 Zuordnungen speichern (inkl. Paar-/Sidecar-Erweiterung) | 110 ms |
 | Exportplan mit 15 000 Vorgängen | 0,55 s |
-| Duplikatprüfung (11 998 Kandidaten gehasht) | 2,1 s |
+| Duplikatprüfung (11 998 Kandidaten gehasht) | 2,3 s |
+| Ähnlichkeitsgruppierung (12 000 Hashes, 72 Mio. Vergleiche) | 0,27 s, längste Event-Loop-Pause 49 ms |
 | Export 15 000 kleine Dateien (Kopie + fsync + SHA-256-Verifikation + Commit) | 42,5 s ≈ **353 Dateien/s** |
 | Export 20 × 32 MB (Kopie + Verifikation) | 1,6 s ≈ **392 MB/s** |
 
@@ -113,7 +134,8 @@ Zeitlimits für alle Decoder-Aufrufe und Entkopplung von Metadaten und Vorschau 
   (`JpgFromRaw`/`PreviewImage`) via ExifTool.
 * Video-Wiedergabe hängt von den Codecs der Electron-Chromium-Version ab (H.264/AAC, VP8/VP9, AV1; HEVC nur mit
   Hardware-Unterstützung). Nicht abspielbare Videos zeigen einen Hinweis; Zuordnung/Export funktionieren.
-* HEIC/HEIF: keine Vorschau (Decoder nicht in sharp enthalten), Export möglich.
+* HEIC/HEIF: Vorschau nur unter Windows mit installierter HEIF-Erweiterung (über WIC, ungetestet); sonst „Keine Vorschau“, Export möglich.
+* Bewertungen und Farbmarkierungen werden nicht in XMP-Dateien geschrieben (nur Projektdatenbank).
 * Hardlink-Fallback auf FAT32/exFAT/einigen NAS: kurzes Zeitfenster, in dem ein **fremdes** Programm eine
   gleichnamige Datei anlegen könnte (eigene Vorgänge sind serialisiert).
 * Der Wiederherstellungsbereich bietet **keinen Schutz bei Datenträgerausfall**.

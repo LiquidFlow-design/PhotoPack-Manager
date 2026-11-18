@@ -121,6 +121,7 @@ export interface WindowHooks {
   presenterShow(mediaId: number | null): void
   presenterNav(delta: number): void
   isPresenterOpen(): boolean
+  presenterCurrent(): number | null
 }
 
 async function pickSave(title: string, defaultPath: string, filters: Electron.FileFilter[]): Promise<string | null> {
@@ -167,7 +168,8 @@ export function registerIpc(getSvc: () => AppService, win: WindowHooks): void {
       closePresenter: { args: z.tuple([]), fn: () => win.closePresenter() },
       presenterShow: { args: z.tuple([mediaId.nullable()]), fn: (m: number | null) => win.presenterShow(m) },
       presenterNav: { args: z.tuple([z.number().int().min(-1000).max(1000)]), fn: (d: number) => win.presenterNav(d) },
-      presenterOpen: { args: z.tuple([]), fn: () => win.isPresenterOpen() }
+      presenterOpen: { args: z.tuple([]), fn: () => win.isPresenterOpen() },
+      presenterCurrent: { args: z.tuple([]), fn: () => win.presenterCurrent() }
     },
     projects: {
       list: { args: z.tuple([]), fn: () => getSvc().projects() },

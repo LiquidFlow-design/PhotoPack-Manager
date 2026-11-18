@@ -19,7 +19,7 @@ interface ProjectRow {
   ui_state: string
 }
 
-export const DEFAULT_UI: ProjectUiState = { filters: DEFAULT_FILTERS, sort: DEFAULT_SORT, sourceId: null, view: 'grid' }
+export const DEFAULT_UI: ProjectUiState = { filters: DEFAULT_FILTERS, sort: DEFAULT_SORT, sourceId: null, view: 'grid', packageView: null }
 
 export class ProjectError extends Error {}
 

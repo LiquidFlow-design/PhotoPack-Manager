@@ -5,15 +5,20 @@ import path from 'node:path'
 import { app, BrowserWindow, dialog, ipcMain, shell } from 'electron'
 import { z } from 'zod'
 import { API_METHODS, channel, type AddSourceResult, type ChooseDirResult, type Result } from '@shared/api'
-import { DEFAULT_SETTINGS, type AppSettings } from '@shared/types'
+import { DEFAULT_SETTINGS, type AppSettings, type ColorLabel } from '@shared/types'
 import type { AppService } from './services/app-service'
 import { createProject, deleteProject, getProject, renameProject, saveUiState, updateProjectSettings } from './core/projects'
 import { addSource, checkSourcePath, listSources, removeSource, targetConflictsWithSources } from './core/sources'
 import { createPackage, deletePackage, listPackages, updatePackage } from './core/packages'
 import { applyAssignments, listAssignments, listExported } from './core/assignments'
-import { holdRecovery, purgeRecovery, recoveryOverview, releaseRecovery } from './core/recovery'
+import { holdRecovery, purgeRecovery, recoveryOverview, releaseAllHeld, releaseRecovery } from './core/recovery'
 import { listDuplicateGroups } from './core/duplicates'
-import { isInside } from './core/paths'
+import { listSimilarGroups } from './core/similar'
+import { isInside, sanitizeFileName } from './core/paths'
+import { packageOrder, reorderPackage } from './core/assignments'
+import { reorderPackages } from './core/packages'
+import { setColorLabel, setRating } from './core/media-meta'
+import { exportProject, importProject } from './core/backup'
 
 const id = z.string().min(1).max(64)
 const mediaId = z.number().int().positive()
@@ -27,19 +32,22 @@ const filterSchema = z.object({
   kinds: z.array(kind).max(3),
   assignment: z.enum(['all', 'none', 'any', 'partial']),
   packageIds: z.array(id).max(500),
-  duplicates: z.enum(['all', 'only', 'none']),
+  duplicates: z.enum(['all', 'only', 'none', 'similar']),
   formats: z.array(z.string().max(10)).max(100),
   dateFrom: z.string().regex(/^\d{4}-\d{2}-\d{2}$/).nullable(),
   dateTo: z.string().regex(/^\d{4}-\d{2}-\d{2}$/).nullable(),
   exportState: z.enum(['all', 'exported', 'pending']),
   location: z.enum(['all', 'moved', 'missing']),
+  minRating: z.number().int().min(0).max(5),
+  colorLabels: z.array(z.enum(['red', 'yellow', 'green', 'blue', 'purple'])).max(5),
   search: z.string().max(500)
 })
 const uiSchema = z.object({
   filters: filterSchema,
-  sort: z.object({ key: z.enum(['name', 'date', 'size', 'type', 'folder']), dir: z.enum(['asc', 'desc']) }),
+  sort: z.object({ key: z.enum(['name', 'date', 'size', 'type', 'folder', 'rating', 'custom']), dir: z.enum(['asc', 'desc']) }),
   sourceId: id.nullable(),
-  view: z.enum(['grid', 'focus'])
+  view: z.enum(['grid', 'focus']),
+  packageView: id.nullable()
 })
 const settingsPatch = z
   .object({
@@ -55,7 +63,12 @@ const settingsPatch = z
       leftCollapsed: z.boolean(),
       rightCollapsed: z.boolean()
     }),
-    thumbSize: z.number().int().min(100).max(400)
+    thumbSize: z.number().int().min(100).max(400),
+    pairRawJpeg: z.boolean(),
+    includeSidecars: z.boolean(),
+    instantDelaySec: z.number().int().min(0).max(30),
+    recoveryPerVolume: z.boolean(),
+    similarityThreshold: z.number().int().min(2).max(20)
   })
   .partial()
   .strict()
@@ -102,7 +115,27 @@ async function checkTargetDir(svc: AppService, projectId: string, dir: string): 
   return {}
 }
 
-export function registerIpc(getSvc: () => AppService): void {
+export interface WindowHooks {
+  openPresenter(): void
+  closePresenter(): void
+  presenterShow(mediaId: number | null): void
+  presenterNav(delta: number): void
+  isPresenterOpen(): boolean
+}
+
+async function pickSave(title: string, defaultPath: string, filters: Electron.FileFilter[]): Promise<string | null> {
+  const win = BrowserWindow.getFocusedWindow() ?? BrowserWindow.getAllWindows()[0]
+  const r = await dialog.showSaveDialog(win, { title, defaultPath, filters, properties: ['createDirectory', 'showOverwriteConfirmation'] })
+  return r.canceled || !r.filePath ? null : r.filePath
+}
+
+async function pickFile(title: string, filters: Electron.FileFilter[]): Promise<string | null> {
+  const win = BrowserWindow.getFocusedWindow() ?? BrowserWindow.getAllWindows()[0]
+  const r = await dialog.showOpenDialog(win, { title, filters, properties: ['openFile'] })
+  return r.canceled || !r.filePaths[0] ? null : r.filePaths[0]
+}
+
+export function registerIpc(getSvc: () => AppService, win: WindowHooks): void {
   const defs: Record<string, Record<string, Def>> = {
     app: {
       startup: {
@@ -129,7 +162,12 @@ export function registerIpc(getSvc: () => AppService): void {
         }
       },
       clearThumbCache: { args: z.tuple([]), fn: () => getSvc().media.clearCache() },
-      openLogFolder: { args: z.tuple([]), fn: () => shell.openPath(getSvc().dataDir) }
+      openLogFolder: { args: z.tuple([]), fn: () => shell.openPath(getSvc().dataDir) },
+      openPresenter: { args: z.tuple([]), fn: () => win.openPresenter() },
+      closePresenter: { args: z.tuple([]), fn: () => win.closePresenter() },
+      presenterShow: { args: z.tuple([mediaId.nullable()]), fn: (m: number | null) => win.presenterShow(m) },
+      presenterNav: { args: z.tuple([z.number().int().min(-1000).max(1000)]), fn: (d: number) => win.presenterNav(d) },
+      presenterOpen: { args: z.tuple([]), fn: () => win.isPresenterOpen() }
     },
     projects: {
       list: { args: z.tuple([]), fn: () => getSvc().projects() },
@@ -203,7 +241,29 @@ export function registerIpc(getSvc: () => AppService): void {
         }
       },
       tasks: { args: z.tuple([id]), fn: (pid: string) => getSvc().runningTasks(pid) },
-      cancelTask: { args: z.tuple([id, z.enum(['scan', 'thumbs', 'duplicates', 'export', 'recovery'])]), fn: (pid: string, k: 'scan') => getSvc().cancelTask(pid, k) }
+      cancelTask: {
+        args: z.tuple([id, z.enum(['scan', 'thumbs', 'duplicates', 'similar', 'export', 'recovery', 'zip'])]),
+        fn: (pid: string, k: 'scan') => getSvc().cancelTask(pid, k)
+      },
+      exportBackup: {
+        args: z.tuple([id]),
+        fn: async (pid: string) => {
+          const p = getProject(getSvc().ctx, pid)
+          const safe = p.name.replace(/[<>:"/\\|?*]/g, '_')
+          const file = await pickSave('Projekt sichern', path.join(app.getPath('documents'), `${safe}.ppmproj`), [{ name: 'PhotoPack-Projekt', extensions: ['ppmproj'] }])
+          if (!file) return null
+          const r = exportProject(getSvc().ctx, pid, file)
+          return { file, media: r.media }
+        }
+      },
+      importBackup: {
+        args: z.tuple([]),
+        fn: async () => {
+          const file = await pickFile('Projektsicherung importieren', [{ name: 'PhotoPack-Projekt', extensions: ['ppmproj'] }])
+          if (!file) return null
+          return importProject(getSvc().ctx, file)
+        }
+      }
     },
     sources: {
       add: {
@@ -271,6 +331,14 @@ export function registerIpc(getSvc: () => AppService): void {
               : (db.prepare('SELECT recovery_path AS path FROM recovery_items WHERE id = ?').get(ref) as { path: string } | undefined)
           if (row && fs.existsSync(row.path)) shell.showItemInFolder(row.path)
         }
+      },
+      setRating: {
+        args: z.tuple([id, z.array(mediaId).max(100000), z.number().int().min(0).max(5)]),
+        fn: (pid: string, ids: number[], r: number) => setRating(getSvc().ctx, pid, ids, r)
+      },
+      setColor: {
+        args: z.tuple([id, z.array(mediaId).max(100000), z.enum(['red', 'yellow', 'green', 'blue', 'purple']).nullable()]),
+        fn: (pid: string, ids: number[], c: ColorLabel | null) => setColorLabel(getSvc().ctx, pid, ids, c)
       }
     },
     packages: {
@@ -324,6 +392,31 @@ export function registerIpc(getSvc: () => AppService): void {
           if (!row) return
           const p = listPackages(svc.ctx, row.project_id).find((x) => x.id === pkgId)
           if (p?.effectiveTargetDir && fs.existsSync(p.effectiveTargetDir)) await shell.openPath(p.effectiveTargetDir)
+        }
+      },
+      order: { args: z.tuple([id]), fn: (pkgId: string) => packageOrder(getSvc().ctx, pkgId) },
+      reorderMedia: {
+        args: z.tuple([id, z.array(mediaId).max(200000)]),
+        fn: (pkgId: string, ids: number[]) => {
+          const r = reorderPackage(getSvc().ctx, pkgId, ids)
+          const row = getSvc().db.prepare('SELECT project_id FROM packages WHERE id = ?').get(pkgId) as { project_id: string } | undefined
+          if (row) getSvc().ctx.emit({ type: 'packages-changed', projectId: row.project_id })
+          return r
+        }
+      },
+      reorder: { args: z.tuple([id, z.array(id).max(1000)]), fn: (pid: string, ids: string[]) => reorderPackages(getSvc().ctx, pid, ids) },
+      exportZip: {
+        args: z.tuple([id]),
+        fn: async (pkgId: string) => {
+          const svc = getSvc()
+          const row = svc.db.prepare('SELECT project_id, name FROM packages WHERE id = ?').get(pkgId) as { project_id: string; name: string } | undefined
+          if (!row) throw new Error('Paket nicht gefunden.')
+          const p = getProject(svc.ctx, row.project_id)
+          const base = p.outputDir ?? app.getPath('documents')
+          const file = await pickSave(`„${row.name}“ als ZIP exportieren`, path.join(base, `${sanitizeFileName(row.name)}.zip`), [{ name: 'ZIP-Archiv', extensions: ['zip'] }])
+          if (!file) return null
+          const r = await svc.runZip(row.project_id, pkgId, file)
+          return { file: r.file, entries: r.entries, skipped: r.skipped }
         }
       }
     },
@@ -380,11 +473,14 @@ export function registerIpc(getSvc: () => AppService): void {
           fs.mkdirSync(dir, { recursive: true })
           await shell.openPath(dir)
         }
-      }
+      },
+      releaseAll: { args: z.tuple([id]), fn: (pid: string) => releaseAllHeld(getSvc().ctx, pid) }
     },
     duplicates: {
       scan: { args: z.tuple([id]), fn: (pid: string) => getSvc().scanDuplicates(pid) },
-      groups: { args: z.tuple([id]), fn: (pid: string) => listDuplicateGroups(getSvc().ctx, pid) }
+      groups: { args: z.tuple([id]), fn: (pid: string) => listDuplicateGroups(getSvc().ctx, pid) },
+      scanSimilar: { args: z.tuple([id]), fn: (pid: string) => getSvc().scanSimilar(pid) },
+      similarGroups: { args: z.tuple([id]), fn: (pid: string) => listSimilarGroups(getSvc().ctx, pid) }
     }
   }
 

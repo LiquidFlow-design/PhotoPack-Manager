@@ -17,15 +17,15 @@
     "test:watch": "vitest",
     "test:perf": "vitest run --config vitest.perf.config.mts",
     "test:e2e": "npm run build && playwright test --trace off",
-    "dist:win": "npm run build && electron-builder --win nsis portable --x64",
-    "dist:dir": "npm run build && electron-builder --dir"
+    "dist:win": "npm run build && node scripts/fetch-ffmpeg-lgpl.mjs win32-x64 && electron-builder --win nsis portable --x64",
+    "dist:dir": "npm run build && electron-builder --dir",
+    "fetch:ffmpeg": "node scripts/fetch-ffmpeg-lgpl.mjs"
   },
   "dependencies": {
     "better-sqlite3": "^13.2.0",
     "exiftool-vendored": "^39.4.0",
-    "ffmpeg-static": "^5.3.0",
-    "ffprobe-static": "^3.1.0",
     "sharp": "^0.35.5",
+    "yazl": "^3.3.1",
     "zod": "^4.6.7"
   },
   "devDependencies": {
@@ -35,10 +35,13 @@
     "@types/node": "^22.20.5",
     "@types/react": "^19.3.0",
     "@types/react-dom": "^19.3.0",
+    "@types/yazl": "^3.3.1",
     "@vitejs/plugin-react": "^6.3.0",
     "electron": "^44.11.4",
     "electron-builder": "^26.18.0",
     "electron-vite": "^6.0.0",
+    "ffmpeg-static": "^5.3.0",
+    "ffprobe-static": "^3.1.0",
     "lucide-react": "^1.75.0",
     "react": "^19.3.1",
     "react-dom": "^19.3.1",

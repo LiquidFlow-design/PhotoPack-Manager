@@ -6,6 +6,7 @@ import { inlineFileOps, type FileOps } from '../../src/main/core/fileops'
 import { TransferEngine } from '../../src/main/core/engine'
 import { buildPlan } from '../../src/main/core/planner'
 import { updateProjectSettings } from '../../src/main/core/projects'
+import { updateSettings } from '../../src/main/core/settings'
 import { assign, content, exportAll, items, jobStatus, listFiles, makeEnv, mediaId, pkg, readSha, sha, writeFile, type TestEnv } from '../helpers/env'
 
 let env: TestEnv | null = null
@@ -418,6 +419,28 @@ describe('Auftragssteuerung und Idempotenz', () => {
     const B = pkg(env, 'Max')
     const r2 = await assign(env, [[mediaId(env, 'a.jpg'), B]])
     expect(r2.jobId).toBeNull()
+  })
+
+  it('Sofortmodus-Gnadenfrist: Start erst nach Ablauf, Rückgängig verhindert die Übertragung', async () => {
+    env = await makeEnv({ 'a.jpg': content('a'), 'b.jpg': content('b') })
+    updateSettings(env.ctx, { instantDelaySec: 3 })
+    updateProjectSettings(env.ctx, env.projectId, { workMode: 'instant', operation: 'move' })
+    const A = pkg(env, 'Anna')
+    const a = mediaId(env, 'a.jpg')
+    const b = mediaId(env, 'b.jpg')
+    const r1 = await assign(env, [[a, A]])
+    await env.engine.waitIdle()
+    expect(items(env, r1.jobId!)[0].status).toBe('pending') // noch in der Frist
+    // Rückgängig innerhalb der Frist
+    const undo = await applyAssignments(env.ctx, env.engine, env.projectId, { added: [], removed: [[a, A]] })
+    expect(undo.cancelledItems).toBe(1)
+    const r2 = await assign(env, [[b, A]])
+    env.clock.t += 3500
+    env.engine.start()
+    await env.engine.waitIdle()
+    expect(jobStatus(env, r2.jobId!)).toBe('completed')
+    expect(listFiles(env.outDir)).toEqual(['Anna/b.jpg'])
+    expect(fs.existsSync(path.join(env.srcDir, 'a.jpg'))).toBe(true)
   })
 
   it('Pause, Fortsetzen und Abbruch', async () => {

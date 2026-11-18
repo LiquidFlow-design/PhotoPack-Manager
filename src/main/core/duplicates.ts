@@ -12,8 +12,8 @@ export async function scanDuplicates(
   const cands = ctx.db
     .prepare(
       `SELECT id, current_path, size, sha256 FROM media
-       WHERE project_id = ? AND location != 'missing' AND size > 0
-         AND size IN (SELECT size FROM media WHERE project_id = ? AND location != 'missing' AND size > 0 GROUP BY size HAVING COUNT(*) > 1)`
+       WHERE project_id = ? AND role = 'main' AND location != 'missing' AND size > 0
+         AND size IN (SELECT size FROM media WHERE project_id = ? AND role = 'main' AND location != 'missing' AND size > 0 GROUP BY size HAVING COUNT(*) > 1)`
     )
     .all(projectId, projectId) as Array<{ id: number; current_path: string; size: number; sha256: string | null }>
   const todo = cands.filter((c) => !c.sha256)
@@ -43,9 +43,9 @@ export async function scanDuplicates(
   const groups = ctx.db.transaction(() => {
     ctx.db.prepare('UPDATE media SET dup_group = NULL WHERE project_id = ?').run(projectId)
     const g = ctx.db
-      .prepare("SELECT sha256 FROM media WHERE project_id = ? AND sha256 IS NOT NULL AND location != 'missing' GROUP BY sha256 HAVING COUNT(*) > 1")
+      .prepare("SELECT sha256 FROM media WHERE project_id = ? AND role = 'main' AND sha256 IS NOT NULL AND location != 'missing' GROUP BY sha256 HAVING COUNT(*) > 1")
       .all(projectId) as Array<{ sha256: string }>
-    const set = ctx.db.prepare("UPDATE media SET dup_group = ? WHERE project_id = ? AND sha256 = ? AND location != 'missing'")
+    const set = ctx.db.prepare("UPDATE media SET dup_group = ? WHERE project_id = ? AND role = 'main' AND sha256 = ? AND location != 'missing'")
     for (const x of g) set.run(x.sha256, projectId, x.sha256)
     return g.length
   })()

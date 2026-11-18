@@ -22,6 +22,8 @@ import { listPackages } from '../core/packages'
 import { listAssignments, listExported } from '../core/assignments'
 import { purgeRecovery } from '../core/recovery'
 import { scanDuplicates } from '../core/duplicates'
+import { scanSimilar } from '../core/similar'
+import { exportPackageZip, type ZipResult } from '../core/zip-export'
 import { getSettings, updateSettings } from '../core/settings'
 import { MediaProcessor, resolveToolPaths } from './media-tools'
 
@@ -43,10 +45,16 @@ interface MediaDbRow {
   thumb_error: string | null
   dup_group: string | null
   sha256: string | null
+  pair_id: number | null
+  rating: number
+  color_label: MediaRow['colorLabel']
+  sim_group: number | null
+  sidecars: number
 }
 
 const MEDIA_COLS =
-  'id, source_id, file_name, ext, kind, rel_dir, size, mtime_ms, captured_at, width, height, duration_ms, location, thumb_status, thumb_error, dup_group, sha256'
+  "id, source_id, file_name, ext, kind, rel_dir, size, mtime_ms, captured_at, width, height, duration_ms, location, thumb_status, thumb_error, dup_group, sha256, pair_id, rating, color_label, sim_group, (SELECT COUNT(*) FROM media sc WHERE sc.parent_id = media.id) AS sidecars"
+const MAIN = "role = 'main'"
 
 function toRow(r: MediaDbRow): MediaRow {
   return {
@@ -66,7 +74,12 @@ function toRow(r: MediaDbRow): MediaRow {
     thumbStatus: r.thumb_status,
     thumbError: r.thumb_error,
     dupGroup: r.dup_group,
-    hasHash: !!r.sha256
+    hasHash: !!r.sha256,
+    pairId: r.pair_id,
+    sidecars: r.sidecars ?? 0,
+    rating: r.rating ?? 0,
+    colorLabel: r.color_label ?? null,
+    simGroup: r.sim_group
   }
 }
 
@@ -161,7 +174,7 @@ export class AppService {
   }
 
   listMedia(projectId: string): MediaRow[] {
-    return (this.db.prepare(`SELECT ${MEDIA_COLS} FROM media WHERE project_id = ?`).all(projectId) as MediaDbRow[]).map(toRow)
+    return (this.db.prepare(`SELECT ${MEDIA_COLS} FROM media WHERE project_id = ? AND ${MAIN}`).all(projectId) as MediaDbRow[]).map(toRow)
   }
 
   mediaRows(projectId: string, ids: number[]): MediaRow[] {
@@ -268,6 +281,43 @@ export class AppService {
     } finally {
       this.tasks.delete(id)
       this.progress(projectId, 'duplicates', 'Duplikatprüfung abgeschlossen', 1, 1, false)
+    }
+  }
+
+  async scanSimilar(projectId: string): Promise<{ groups: number } | null> {
+    const id = `similar:${projectId}`
+    if (this.tasks.has(id)) return null
+    const ac = new AbortController()
+    const progress: TaskProgress = { id, kind: 'similar', label: 'Ähnliche Bilder suchen', done: 0, total: 0, running: true, error: null }
+    this.tasks.set(id, { ac, progress })
+    try {
+      const r = await scanSimilar(
+        this.ctx,
+        projectId,
+        getSettings(this.ctx).similarityThreshold,
+        (mid) => this.media.ensurePhash(mid),
+        ac.signal,
+        (d, t) => this.progress(projectId, 'similar', 'Ähnliche Bilder suchen', d, t, true)
+      )
+      this.send({ type: 'notice', projectId, level: 'info', message: r.groups ? `${r.groups} Gruppe(n) ähnlicher Bilder gefunden.` : 'Keine ähnlichen Bilder gefunden.' })
+      return { groups: r.groups }
+    } finally {
+      this.tasks.delete(id)
+      this.progress(projectId, 'similar', 'Ähnlichkeitssuche abgeschlossen', 1, 1, false)
+    }
+  }
+
+  async runZip(projectId: string, packageId: string, file: string): Promise<ZipResult> {
+    const id = `zip:${projectId}`
+    if (this.tasks.has(id)) throw new Error('Es läuft bereits ein ZIP-Export.')
+    const ac = new AbortController()
+    const progress: TaskProgress = { id, kind: 'zip', label: 'ZIP-Export', done: 0, total: 0, running: true, error: null }
+    this.tasks.set(id, { ac, progress })
+    try {
+      return await exportPackageZip(this.ctx, packageId, file, { signal: ac.signal, onProgress: (d, t) => this.progress(projectId, 'zip', 'ZIP-Export', d, t, true) })
+    } finally {
+      this.tasks.delete(id)
+      this.progress(projectId, 'zip', 'ZIP-Export abgeschlossen', 1, 1, false)
     }
   }
 

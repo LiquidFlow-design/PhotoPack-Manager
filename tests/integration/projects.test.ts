@@ -24,7 +24,7 @@ describe('Projekte und Persistenz', () => {
     const A = pkg(env, 'Anna')
     await assign(env, [[mediaId(env, 'a.jpg'), A]])
     updateProjectSettings(env.ctx, env.projectId, { workMode: 'instant', operation: 'move', conflictPolicy: 'skip' })
-    saveUiState(env.ctx, env.projectId, { filters: { ...DEFAULT_FILTERS, kinds: ['raw'] }, sort: { key: 'date', dir: 'desc' }, sourceId: null, view: 'focus' })
+    saveUiState(env.ctx, env.projectId, { filters: { ...DEFAULT_FILTERS, kinds: ['raw'] }, sort: { key: 'date', dir: 'desc' }, sourceId: null, view: 'focus', packageView: null })
     updateSettings(env.ctx, { theme: 'dark', quickAssign: 'advance', layout: { leftWidth: 300, rightWidth: 350, leftCollapsed: true, rightCollapsed: false } })
     await env.restart()
     const p = getProject(env.ctx, env.projectId)

@@ -1,6 +1,6 @@
 // Einstiegspunkt des Main-Prozesses.
 import path from 'node:path'
-import { app, BrowserWindow, dialog, nativeTheme, session, shell } from 'electron'
+import { app, BrowserWindow, dialog, Menu, nativeTheme, screen, session } from 'electron'
 import { EVENT_CHANNEL } from '@shared/api'
 import type { AppEvent } from '@shared/types'
 import { AppService } from './services/app-service'
@@ -17,6 +17,7 @@ registerSchemePrivileges()
 
 let svc: AppService | null = null
 let win: BrowserWindow | null = null
+let presenter: BrowserWindow | null = null
 let quitting = false
 
 // Nur eine Instanz: verhindert konkurrierende Schreibzugriffe auf Datenbank und Dateien
@@ -34,6 +35,63 @@ if (!app.requestSingleInstanceLock()) {
 
 function send(e: AppEvent): void {
   if (win && !win.isDestroyed()) win.webContents.send(EVENT_CHANNEL, e)
+}
+
+function sendPresenter(e: AppEvent): void {
+  if (presenter && !presenter.isDestroyed()) presenter.webContents.send(EVENT_CHANNEL, e)
+}
+
+const WEB_PREFS = () => ({
+  preload: path.join(__dirname, '../preload/index.js'),
+  contextIsolation: true,
+  nodeIntegration: false,
+  sandbox: true,
+  webSecurity: true,
+  spellcheck: false
+})
+
+function loadRenderer(w: BrowserWindow, hash = ''): void {
+  if (process.env.ELECTRON_RENDERER_URL) void w.loadURL(process.env.ELECTRON_RENDERER_URL + (hash ? '#' + hash : ''))
+  else void w.loadFile(path.join(__dirname, '../renderer/index.html'), hash ? { hash } : undefined)
+}
+
+function guardNavigation(w: BrowserWindow): void {
+  w.webContents.on('will-navigate', (e, url) => {
+    if (url !== w.webContents.getURL()) e.preventDefault()
+  })
+  w.webContents.setWindowOpenHandler(() => ({ action: 'deny' }))
+}
+
+/** Präsentationsfenster: bevorzugt auf einem zweiten Bildschirm im Vollbild. */
+export function openPresenter(): void {
+  if (presenter && !presenter.isDestroyed()) {
+    presenter.focus()
+    return
+  }
+  const primary = screen.getPrimaryDisplay()
+  const other = screen.getAllDisplays().find((d) => d.id !== primary.id)
+  const area = (other ?? primary).workArea
+  presenter = new BrowserWindow({
+    x: area.x + 40,
+    y: area.y + 40,
+    width: Math.min(1280, area.width - 80),
+    height: Math.min(800, area.height - 80),
+    title: 'PhotoPack Manager – Präsentation',
+    backgroundColor: '#000000',
+    autoHideMenuBar: true,
+    fullscreen: !!other,
+    webPreferences: WEB_PREFS()
+  })
+  guardNavigation(presenter)
+  presenter.on('closed', () => {
+    presenter = null
+    send({ type: 'presenter-closed' })
+  })
+  loadRenderer(presenter, 'presenter')
+}
+
+export function closePresenter(): void {
+  if (presenter && !presenter.isDestroyed()) presenter.close()
 }
 
 async function start(): Promise<void> {
@@ -64,10 +122,20 @@ async function start(): Promise<void> {
   session.defaultSession.setPermissionRequestHandler((_wc, _perm, cb) => cb(false))
 
   registerProtocol(() => svc)
-  registerIpc(() => {
-    if (!svc) throw new Error('Dienst nicht bereit')
-    return svc
-  })
+  Menu.setApplicationMenu(null) // keine Menüleiste (Alt-Taste bleibt für Kürzel frei)
+  registerIpc(
+    () => {
+      if (!svc) throw new Error('Dienst nicht bereit')
+      return svc
+    },
+    {
+      openPresenter,
+      closePresenter,
+      presenterShow: (mediaId) => sendPresenter({ type: 'presenter-show', mediaId }),
+      presenterNav: (delta) => send({ type: 'presenter-nav', delta }),
+      isPresenterOpen: () => !!presenter && !presenter.isDestroyed()
+    }
+  )
   createWindow()
 }
 
@@ -82,25 +150,12 @@ function createWindow(): void {
     title: 'PhotoPack Manager',
     backgroundColor: dark ? '#0c111b' : '#eef2f8',
     autoHideMenuBar: true,
-    webPreferences: {
-      preload: path.join(__dirname, '../preload/index.js'),
-      contextIsolation: true,
-      nodeIntegration: false,
-      sandbox: true,
-      webSecurity: true,
-      spellcheck: false
-    }
+    webPreferences: WEB_PREFS()
   })
   win.setMenuBarVisibility(false)
   win.once('ready-to-show', () => win?.show())
   // Keine Navigation / keine neuen Fenster aus dem Renderer
-  win.webContents.on('will-navigate', (e, url) => {
-    if (url !== win?.webContents.getURL()) e.preventDefault()
-  })
-  win.webContents.setWindowOpenHandler(({ url }) => {
-    if (/^https:\/\//.test(url)) void shell.openExternal(url)
-    return { action: 'deny' }
-  })
+  guardNavigation(win)
   win.on('close', (e) => {
     if (quitting || !svc) return
     if (svc.engine.hasActiveWork()) {
@@ -120,8 +175,8 @@ function createWindow(): void {
     }
   })
 
-  if (process.env.ELECTRON_RENDERER_URL) void win.loadURL(process.env.ELECTRON_RENDERER_URL)
-  else void win.loadFile(path.join(__dirname, '../renderer/index.html'))
+  win.on('closed', () => closePresenter())
+  loadRenderer(win)
 }
 
 app.on('before-quit', (e) => {

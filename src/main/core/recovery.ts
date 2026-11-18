@@ -4,7 +4,8 @@
 //  released  = vom Nutzer freigegeben; nach Ablauf der Aufbewahrungsfrist automatisch löschbar
 import fs from 'node:fs'
 import path from 'node:path'
-import type { RecoveryItemInfo, RecoveryOverview, RecoveryStatus } from '@shared/types'
+import { execFile } from 'node:child_process'
+import type { Project, RecoveryItemInfo, RecoveryOverview, RecoveryStatus } from '@shared/types'
 import { oplog, type CoreContext } from './context'
 import { exists, freeBytes, unlinkIfExists } from './fsx'
 import { getProject } from './projects'
@@ -27,6 +28,38 @@ interface RecRow {
 }
 
 export class RecoveryError extends Error {}
+
+export const VOLUME_RECOVERY_DIR = '.photopack-recovery'
+
+/**
+ * Wiederherstellungsbereich je Laufwerk (Windows): Liegt die Quelle auf einem anderen Laufwerk als der
+ * Standardbereich, wird <Laufwerk>:\.photopack-recovery\<Projekt> verwendet – Verschieben ist dann eine
+ * schnelle Umbenennung statt Kopie. Nicht für Netzwerkfreigaben und nicht bei individuell gesetztem Bereich.
+ */
+export function recoveryDirForSource(ctx: CoreContext, project: Project, srcPath: string, platform: NodeJS.Platform = process.platform): string {
+  if (platform !== 'win32' || project.recoveryDirCustom || !getSettings(ctx).recoveryPerVolume) return project.recoveryDir
+  const srcRoot = path.win32.parse(srcPath).root
+  const recRoot = path.win32.parse(project.recoveryDir).root
+  if (!/^[a-zA-Z]:\\$/.test(srcRoot)) return project.recoveryDir
+  if (srcRoot.toLowerCase() === recRoot.toLowerCase()) return project.recoveryDir
+  return path.win32.join(srcRoot, VOLUME_RECOVERY_DIR, project.id)
+}
+
+/** Ordner unter Windows verstecken (best effort). */
+export async function hideVolumeRecoveryDir(dir: string): Promise<void> {
+  if (process.platform !== 'win32') return
+  const i = dir.toLowerCase().indexOf(VOLUME_RECOVERY_DIR)
+  if (i < 0) return
+  const root = dir.slice(0, i + VOLUME_RECOVERY_DIR.length)
+  await new Promise<void>((resolve) => execFile('attrib', ['+h', root], { windowsHide: true, timeout: 5000 }, () => resolve()))
+}
+
+/** „Projekt abschließen“: alle gehaltenen Quellen freigeben. */
+export function releaseAllHeld(ctx: CoreContext, projectId: string): { count: number; bytes: number } {
+  const rows = ctx.db.prepare("SELECT id, size FROM recovery_items WHERE project_id = ? AND status = 'held'").all(projectId) as Array<{ id: string; size: number }>
+  const count = releaseRecovery(ctx, projectId, rows.map((r) => r.id))
+  return { count, bytes: rows.reduce((a, r) => a + r.size, 0) }
+}
 
 export async function recoveryOverview(ctx: CoreContext, projectId: string): Promise<RecoveryOverview> {
   const p = getProject(ctx, projectId)
@@ -55,7 +88,18 @@ export async function recoveryOverview(ctx: CoreContext, projectId: string): Pro
       exists: live ? await exists(r.recovery_path) : false
     })
   }
-  return { dir: p.recoveryDir, items, heldBytes, releasedBytes, freeBytes: await freeBytes(p.recoveryDir), retentionDays: getSettings(ctx).recoveryRetentionDays }
+  const extraDirs = [
+    ...new Set(
+      rows
+        .filter((r) => r.status === 'held' || r.status === 'released')
+        .map((r) => {
+          const i = r.recovery_path.toLowerCase().indexOf(VOLUME_RECOVERY_DIR)
+          return i >= 0 ? r.recovery_path.slice(0, i + VOLUME_RECOVERY_DIR.length) : null
+        })
+        .filter((x): x is string => !!x)
+    )
+  ]
+  return { dir: p.recoveryDir, extraDirs, items, heldBytes, releasedBytes, freeBytes: await freeBytes(p.recoveryDir), retentionDays: getSettings(ctx).recoveryRetentionDays }
 }
 
 /** Gehaltene Einträge freigeben: Aufbewahrungsfrist läuft (ab Verschiebung, mindestens bis jetzt + 1 Tag). */

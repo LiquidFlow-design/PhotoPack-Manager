@@ -80,7 +80,12 @@ describe(`Skalierung mit ${N} Medien`, () => {
       thumbStatus: 'none',
       thumbError: null,
       dupGroup: null,
-      hasHash: false
+      hasHash: false,
+      pairId: null,
+      sidecars: 0,
+      rating: 0,
+      colorLabel: null,
+      simGroup: null
     }))
     results.ipc_payload_kb = Math.round(JSON.stringify(media).length / 1024)
     const ctx = { assignments: buildIndex([]), exported: buildIndex([]), allPackageIds: [], sourceId: null }

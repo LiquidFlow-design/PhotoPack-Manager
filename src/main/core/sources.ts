@@ -152,6 +152,36 @@ export function removeSource(ctx: CoreContext, sourceId: string): { removedMedia
 
 // ---------------- Indexierung ----------------
 
+/** RAW+JPEG-Paare: gleicher Ordner, gleicher Basisname, genau ein RAW und ein JPEG/HEIC. */
+export function computePairs(ctx: CoreContext, sourceId: string): number {
+  const rows = ctx.db
+    .prepare("SELECT id, rel_dir, file_name, kind, ext FROM media WHERE source_id = ? AND role = 'main' AND location != 'missing'")
+    .all(sourceId) as Array<{ id: number; rel_dir: string; file_name: string; kind: string; ext: string }>
+  const groups = new Map<string, typeof rows>()
+  for (const r of rows) {
+    const i = r.file_name.lastIndexOf('.')
+    const k = `${r.rel_dir}|${(i > 0 ? r.file_name.slice(0, i) : r.file_name).toLowerCase()}`
+    const g = groups.get(k) ?? []
+    g.push(r)
+    groups.set(k, g)
+  }
+  let pairs = 0
+  ctx.db.transaction(() => {
+    ctx.db.prepare('UPDATE media SET pair_id = NULL WHERE source_id = ?').run(sourceId)
+    const set = ctx.db.prepare('UPDATE media SET pair_id = ? WHERE id = ?')
+    for (const g of groups.values()) {
+      if (g.length !== 2) continue
+      const raw = g.find((x) => x.kind === 'raw')
+      const img = g.find((x) => x.kind === 'image' && PAIR_IMAGE_EXTS.has(x.ext))
+      if (!raw || !img) continue
+      set.run(img.id, raw.id)
+      set.run(raw.id, img.id)
+      pairs++
+    }
+  })()
+  return pairs
+}
+
 export interface ScanProgress {
   files: number
   dirs: number
@@ -175,6 +205,14 @@ interface FoundFile {
   kind: 'image' | 'raw' | 'video'
   size: number
   mtimeMs: number
+  role?: 'main' | 'sidecar'
+  parentId?: number | null
+}
+
+const PAIR_IMAGE_EXTS = new Set(['jpg', 'jpeg', 'jpe', 'heic', 'heif'])
+const baseName = (n: string) => {
+  const i = n.lastIndexOf('.')
+  return (i > 0 ? n.slice(0, i) : n).toLowerCase()
 }
 
 export async function scanSource(ctx: CoreContext, sourceId: string, signal?: AbortSignal, onProgress?: (p: ScanProgress) => void): Promise<ScanResult> {
@@ -208,10 +246,11 @@ export async function scanSource(ctx: CoreContext, sourceId: string, signal?: Ab
   const seen = new Set<number>()
 
   const insert = ctx.db.prepare(
-    `INSERT INTO media (project_id, source_id, original_path, path_key, current_path, location, rel_dir, file_name, ext, kind, size, mtime_ms, imported_at, updated_at)
-     VALUES (?,?,?,?,?, 'source', ?,?,?,?,?,?,?,?)
+    `INSERT INTO media (project_id, source_id, original_path, path_key, current_path, location, rel_dir, file_name, ext, kind, size, mtime_ms, imported_at, updated_at, role, parent_id)
+     VALUES (?,?,?,?,?, 'source', ?,?,?,?,?,?,?,?,?,?)
      ON CONFLICT(project_id, path_key) DO NOTHING`
   )
+  const setParent = ctx.db.prepare("UPDATE media SET parent_id = ?, kind = ? WHERE id = ? AND role = 'sidecar'")
   const updateChanged = ctx.db.prepare(
     `UPDATE media SET size=?, mtime_ms=?, sha256=NULL, hashed_at=NULL, thumb_status='none', thumb_error=NULL, meta_status='none',
        dup_group=NULL, location='source', current_path=?, updated_at=? WHERE id=?`
@@ -226,6 +265,7 @@ export async function scanSource(ctx: CoreContext, sourceId: string, signal?: Ab
       const ex = existing.get(key)
       if (ex) {
         seen.add(ex.id)
+        if (f.role === 'sidecar') setParent.run(f.parentId ?? null, f.kind, ex.id)
         if (ex.location === 'recovery') {
           // Kann nicht auftreten (path_key wird beim Verschieben umgestellt) – defensiv ignorieren
           result.unchanged++
@@ -237,7 +277,7 @@ export async function scanSource(ctx: CoreContext, sourceId: string, signal?: Ab
           result.unchanged++
         }
       } else {
-        const r = insert.run(projectId, sourceId, f.full, key, f.full, f.relDir, f.name, f.ext, f.kind, f.size, Math.round(f.mtimeMs), t, t)
+        const r = insert.run(projectId, sourceId, f.full, key, f.full, f.relDir, f.name, f.ext, f.kind, f.size, Math.round(f.mtimeMs), t, t, f.role ?? 'main', f.parentId ?? null)
         if (r.changes) result.added++
       }
     }
@@ -245,6 +285,7 @@ export async function scanSource(ctx: CoreContext, sourceId: string, signal?: Ab
 
   let files = 0
   let dirs = 0
+  const sidecarFiles: FoundFile[] = []
   const stack: string[] = [src.path]
   while (stack.length) {
     if (signal?.aborted) break
@@ -276,6 +317,16 @@ export async function scanSource(ctx: CoreContext, sourceId: string, signal?: Ab
         if (!ent.isFile()) continue
         if (isOwnTempFile(ent.name)) continue
         const ext = extOf(ent.name)
+        if (ext === 'xmp') {
+          try {
+            const st = await fs.promises.lstat(full)
+            const rel = path.relative(src.path, dir)
+            sidecarFiles.push({ full, relDir: rel, name: ent.name, ext, kind: 'image', size: st.size, mtimeMs: st.mtimeMs, role: 'sidecar' })
+          } catch {
+            /* ignorieren */
+          }
+          continue
+        }
         const kind = kindForExt(ext)
         if (!kind) continue
         let st: fs.Stats
@@ -299,6 +350,33 @@ export async function scanSource(ctx: CoreContext, sourceId: string, signal?: Ab
     }
   }
   if (batch.length) flush(batch)
+
+  // XMP-Sidecars ihrem Medium zuordnen (IMG_1.xmp oder IMG_1.CR3.xmp); bevorzugt RAW
+  if (sidecarFiles.length) {
+    const mains = ctx.db
+      .prepare("SELECT id, rel_dir, file_name, kind FROM media WHERE source_id = ? AND role = 'main'")
+      .all(sourceId) as Array<{ id: number; rel_dir: string; file_name: string; kind: 'image' | 'raw' | 'video' }>
+    const byFull = new Map<string, (typeof mains)[number]>()
+    const byBase = new Map<string, Array<(typeof mains)[number]>>()
+    for (const m of mains) {
+      byFull.set(`${m.rel_dir}|${m.file_name.toLowerCase()}`, m)
+      const k = `${m.rel_dir}|${baseName(m.file_name)}`
+      const arr = byBase.get(k) ?? []
+      arr.push(m)
+      byBase.set(k, arr)
+    }
+    const rank = { raw: 0, image: 1, video: 2 }
+    const linked: FoundFile[] = []
+    for (const sc of sidecarFiles) {
+      const stem = sc.name.slice(0, -4)
+      let parent = byFull.get(`${sc.relDir}|${stem.toLowerCase()}`)
+      if (!parent) parent = (byBase.get(`${sc.relDir}|${stem.toLowerCase()}`) ?? []).slice().sort((a, b) => rank[a.kind] - rank[b.kind])[0]
+      if (!parent) continue
+      linked.push({ ...sc, kind: parent.kind, parentId: parent.id })
+    }
+    for (let i = 0; i < linked.length; i += 500) flush(linked.slice(i, i + 500))
+  }
+  computePairs(ctx, sourceId)
 
   const aborted = !!signal?.aborted
   if (!aborted) {

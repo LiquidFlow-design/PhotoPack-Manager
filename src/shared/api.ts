@@ -5,6 +5,7 @@ import type {
   AppSettings,
   AssignmentDelta,
   AssignResult,
+  ColorLabel,
   ConflictPolicy,
   DuplicateGroup,
   ExportPlanOptions,
@@ -20,6 +21,7 @@ import type {
   ProjectSummary,
   ProjectUiState,
   RecoveryOverview,
+  SimilarGroup,
   Source,
   StartupInfo,
   TaskProgress,
@@ -51,6 +53,11 @@ export interface PpmApi {
     updateSettings(patch: Partial<AppSettings>): Promise<AppSettings>
     clearThumbCache(): Promise<void>
     openLogFolder(): Promise<void>
+    openPresenter(): Promise<void>
+    closePresenter(): Promise<void>
+    presenterShow(mediaId: number | null): Promise<void>
+    presenterNav(delta: number): Promise<void>
+    presenterOpen(): Promise<boolean>
   }
   projects: {
     list(): Promise<ProjectSummary[]>
@@ -66,6 +73,8 @@ export interface PpmApi {
     resetRecoveryDir(id: string): Promise<Project>
     tasks(id: string): Promise<TaskProgress[]>
     cancelTask(id: string, kind: TaskProgress['kind']): Promise<void>
+    exportBackup(id: string): Promise<{ file: string; media: number } | null>
+    importBackup(): Promise<{ projectId: string; name: string; media: number } | null>
   }
   sources: {
     add(projectId: string): Promise<AddSourceResult>
@@ -80,6 +89,8 @@ export interface PpmApi {
     detail(mediaId: number): Promise<MediaDetail | null>
     reveal(mediaId: number): Promise<void>
     revealPath(kind: 'destination' | 'recovery', ref: string): Promise<void>
+    setRating(projectId: string, ids: number[], rating: number): Promise<number[]>
+    setColor(projectId: string, ids: number[], color: ColorLabel | null): Promise<number[]>
   }
   packages: {
     list(projectId: string): Promise<PackageInfo[]>
@@ -89,6 +100,10 @@ export interface PpmApi {
     chooseTargetDir(id: string, confirmToken?: string): Promise<ChooseDirResult>
     clearTargetDir(id: string): Promise<PackageInfo>
     openTarget(id: string): Promise<void>
+    order(id: string): Promise<number[]>
+    reorderMedia(id: string, orderedMediaIds: number[]): Promise<number[]>
+    reorder(projectId: string, orderedPackageIds: string[]): Promise<void>
+    exportZip(id: string): Promise<{ file: string; entries: number; skipped: Array<{ name: string; reason: string }> } | null>
   }
   assign: {
     apply(projectId: string, delta: AssignmentDelta): Promise<AssignResult>
@@ -113,26 +128,45 @@ export interface PpmApi {
     hold(projectId: string, ids: string[]): Promise<number>
     purge(projectId: string, ids: string[]): Promise<{ purged: number; bytes: number; skipped: number }>
     openFolder(projectId: string): Promise<void>
+    releaseAll(projectId: string): Promise<{ count: number; bytes: number }>
   }
   duplicates: {
     scan(projectId: string): Promise<{ groups: number } | null>
     groups(projectId: string): Promise<DuplicateGroup[]>
+    scanSimilar(projectId: string): Promise<{ groups: number } | null>
+    similarGroups(projectId: string): Promise<SimilarGroup[]>
   }
   onEvent(cb: (e: AppEvent) => void): () => void
 }
 
 /** Liste aller Methoden je Gruppe – Preload und Main leiten daraus Kanalnamen ab. */
 export const API_METHODS = {
-  app: ['startup', 'getSettings', 'updateSettings', 'clearThumbCache', 'openLogFolder'],
-  projects: ['list', 'create', 'open', 'rename', 'remove', 'update', 'saveUi', 'chooseOutputDir', 'clearOutputDir', 'chooseRecoveryDir', 'resetRecoveryDir', 'tasks', 'cancelTask'],
+  app: ['startup', 'getSettings', 'updateSettings', 'clearThumbCache', 'openLogFolder', 'openPresenter', 'closePresenter', 'presenterShow', 'presenterNav', 'presenterOpen'],
+  projects: [
+    'list',
+    'create',
+    'open',
+    'rename',
+    'remove',
+    'update',
+    'saveUi',
+    'chooseOutputDir',
+    'clearOutputDir',
+    'chooseRecoveryDir',
+    'resetRecoveryDir',
+    'tasks',
+    'cancelTask',
+    'exportBackup',
+    'importBackup'
+  ],
   sources: ['add', 'confirmAdd', 'rescan', 'remove', 'list'],
-  media: ['list', 'rows', 'detail', 'reveal', 'revealPath'],
-  packages: ['list', 'create', 'update', 'remove', 'chooseTargetDir', 'clearTargetDir', 'openTarget'],
+  media: ['list', 'rows', 'detail', 'reveal', 'revealPath', 'setRating', 'setColor'],
+  packages: ['list', 'create', 'update', 'remove', 'chooseTargetDir', 'clearTargetDir', 'openTarget', 'order', 'reorderMedia', 'reorder', 'exportZip'],
   assign: ['apply', 'list'],
   exports: ['preview', 'start'],
   jobs: ['list', 'items', 'pause', 'resume', 'cancel', 'retry'],
-  recovery: ['overview', 'restore', 'release', 'hold', 'purge', 'openFolder'],
-  duplicates: ['scan', 'groups']
+  recovery: ['overview', 'restore', 'release', 'hold', 'purge', 'openFolder', 'releaseAll'],
+  duplicates: ['scan', 'groups', 'scanSimilar', 'similarGroups']
 } as const
 
 export const EVENT_CHANNEL = 'ppm:event'

@@ -6,6 +6,7 @@ import fs from 'node:fs'
 import path from 'node:path'
 import { BROWSER_NATIVE_IMAGE } from '@shared/media-kinds'
 import type { CoreContext } from '../core/context'
+import { dhashFromPixels } from '../core/similar'
 
 type Sharp = typeof import('sharp').default
 type ExifToolT = import('exiftool-vendored').ExifTool
@@ -62,24 +63,74 @@ function asarUnpacked(p: string | null): string | null {
   return p.replace(`app.asar${path.sep}`, `app.asar.unpacked${path.sep}`)
 }
 
+/**
+ * Reihenfolge: Umgebungsvariablen → mitgeliefertes LGPL-FFmpeg (resources/ffmpeg) → vendor/ffmpeg (Entwicklung,
+ * per scripts/fetch-ffmpeg-lgpl.mjs) → ffmpeg-static/ffprobe-static (nur Entwicklung/Tests, nicht ausgeliefert).
+ */
 export function resolveToolPaths(): ToolPaths {
-  let ffmpeg: string | null = null
-  let ffprobe: string | null = null
-  try {
-    // eslint-disable-next-line @typescript-eslint/no-require-imports
-    ffmpeg = asarUnpacked(require('ffmpeg-static') as string)
-  } catch {
-    ffmpeg = null
+  const exe = process.platform === 'win32' ? '.exe' : ''
+  const dirs: string[] = []
+  const rp = (process as NodeJS.Process & { resourcesPath?: string }).resourcesPath
+  if (rp) dirs.push(path.join(rp, 'ffmpeg'))
+  dirs.push(path.resolve(__dirname, '../../vendor/ffmpeg', `${process.platform}-${process.arch}`, 'bin'))
+  dirs.push(path.resolve(process.cwd(), 'vendor/ffmpeg', `${process.platform}-${process.arch}`, 'bin'))
+  const find = (envVar: string, name: string, fallback: () => string | null): string | null => {
+    const env = process.env[envVar]
+    if (env && fs.existsSync(env)) return env
+    for (const d of dirs) {
+      const f = path.join(d, name + exe)
+      if (fs.existsSync(f)) return f
+    }
+    try {
+      const f = asarUnpacked(fallback())
+      return f && fs.existsSync(f) ? f : null
+    } catch {
+      return null
+    }
   }
-  try {
+  return {
     // eslint-disable-next-line @typescript-eslint/no-require-imports
-    ffprobe = asarUnpacked((require('ffprobe-static') as { path: string }).path)
-  } catch {
-    ffprobe = null
+    ffmpeg: find('PPM_FFMPEG', 'ffmpeg', () => require('ffmpeg-static') as string),
+    // eslint-disable-next-line @typescript-eslint/no-require-imports
+    ffprobe: find('PPM_FFPROBE', 'ffprobe', () => (require('ffprobe-static') as { path: string }).path)
   }
-  if (ffmpeg && !fs.existsSync(ffmpeg)) ffmpeg = null
-  if (ffprobe && !fs.existsSync(ffprobe)) ffprobe = null
-  return { ffmpeg, ffprobe }
+}
+
+/** HEIC/HEIF unter Windows über die Windows-Bildkomponente (WIC, „HEIF-Bilderweiterungen“) in JPEG wandeln. */
+export function wicToJpeg(file: string, maxPx: number, timeoutMs = 30000): Promise<Buffer | null> {
+  if (process.platform !== 'win32') return Promise.resolve(null)
+  const out = path.join(path.dirname(file), '.ppm-wic-' + crypto.randomUUID() + '.jpg')
+  const tmpOut = path.join(require('node:os').tmpdir(), path.basename(out))
+  const script = [
+    'Add-Type -AssemblyName PresentationCore',
+    '$s=[IO.File]::OpenRead($env:PPM_IN)',
+    'try {',
+    '$d=[Windows.Media.Imaging.BitmapDecoder]::Create($s,[Windows.Media.Imaging.BitmapCreateOptions]::None,[Windows.Media.Imaging.BitmapCacheOption]::OnLoad)',
+    '$f=$d.Frames[0]',
+    '$m=[double]$env:PPM_MAX',
+    '$k=[Math]::Min(1.0, $m / [Math]::Max($f.PixelWidth,$f.PixelHeight))',
+    '$t=New-Object Windows.Media.Imaging.TransformedBitmap($f,(New-Object Windows.Media.ScaleTransform($k,$k)))',
+    '$e=New-Object Windows.Media.Imaging.JpegBitmapEncoder; $e.QualityLevel=88',
+    '$e.Frames.Add([Windows.Media.Imaging.BitmapFrame]::Create($t))',
+    '$o=[IO.File]::Create($env:PPM_OUT); $e.Save($o); $o.Close()',
+    '} finally { $s.Close() }'
+  ].join('; ')
+  return new Promise((resolve) => {
+    execFile(
+      'powershell.exe',
+      ['-NoProfile', '-NonInteractive', '-ExecutionPolicy', 'Bypass', '-Command', script],
+      { timeout: timeoutMs, windowsHide: true, env: { ...process.env, PPM_IN: file, PPM_OUT: tmpOut, PPM_MAX: String(maxPx) } },
+      (err) => {
+        let buf: Buffer | null = null
+        try {
+          if (!err) buf = fs.readFileSync(tmpOut)
+        } catch {
+          buf = null
+        }
+        fs.rm(tmpOut, { force: true }, () => resolve(buf && buf.length > 0 ? buf : null))
+      }
+    )
+  })
 }
 
 interface QueueTask {
@@ -238,12 +289,30 @@ export class MediaProcessor {
       const tmp = out + '.' + process.pid + '.part'
       await fs.promises.writeFile(tmp, buf)
       await fs.promises.rename(tmp, out)
-      if (t.kind === 'thumb') this.setThumb(m, 'ok', null)
+      if (t.kind === 'thumb') {
+        await this.storePhash(m.id, buf).catch(() => {})
+        this.setThumb(m, 'ok', null)
+      }
       return out
     } catch (e) {
       if (t.kind === 'thumb') this.setThumb(m, 'error', shortError(e))
       return null
     }
+  }
+
+  private async storePhash(id: number, image: Buffer | string): Promise<void> {
+    if (!this.sharp) return
+    const px = await this.sharp(image).grayscale().resize(9, 8, { fit: 'fill' }).raw().toBuffer()
+    this.ctx.db.prepare('UPDATE media SET phash = ? WHERE id = ?').run(dhashFromPixels(px), id)
+  }
+
+  /** Wahrnehmungs-Hash sicherstellen (aus vorhandenem Vorschau-Cache oder durch Erzeugen der Vorschau). */
+  async ensurePhash(mediaId: number): Promise<void> {
+    const m = this.media(mediaId)
+    if (!m || m.location === 'missing') return
+    const file = this.cacheFile(m, 'thumb')
+    if (fs.existsSync(file)) await this.storePhash(mediaId, file)
+    else await this.getThumb(mediaId, false)
   }
 
   private setThumb(m: MediaInfo, status: 'ok' | 'error', err: string | null): void {
@@ -262,6 +331,11 @@ export class MediaProcessor {
     } else if (m.kind === 'video') {
       const b = await this.videoFrame(m.current_path, kind === 'thumb' ? 640 : 1920)
       if (!b) throw new Error('Videovorschau nicht möglich (Codec?)')
+      input = b
+    } else if (m.ext === 'heic' || m.ext === 'heif') {
+      // sharp enthält keinen HEVC-Decoder -> unter Windows über WIC
+      const b = await wicToJpeg(m.current_path, px)
+      if (!b) throw new Error('HEIC-Vorschau nicht möglich (Windows-HEIF-Erweiterung installiert?)')
       input = b
     }
     const img = sharp(input, { failOn: 'none', limitInputPixels: 400_000_000, sequentialRead: true }).rotate()
@@ -394,12 +468,12 @@ export class MediaProcessor {
     const state = { running: true, stop: false }
     this.background.set(projectId, state)
     void (async () => {
-      const total = (this.ctx.db.prepare("SELECT COUNT(*) AS n FROM media WHERE project_id = ? AND location != 'missing'").get(projectId) as { n: number }).n
+      const total = (this.ctx.db.prepare("SELECT COUNT(*) AS n FROM media WHERE project_id = ? AND role = 'main' AND location != 'missing'").get(projectId) as { n: number }).n
       let lastEmit = 0
       for (;;) {
         if (state.stop || this.closed) break
         const batch = this.ctx.db
-          .prepare("SELECT id FROM media WHERE project_id = ? AND location != 'missing' AND thumb_status = 'none' ORDER BY id LIMIT 50")
+          .prepare("SELECT id FROM media WHERE project_id = ? AND role = 'main' AND location != 'missing' AND thumb_status = 'none' ORDER BY id LIMIT 50")
           .all(projectId) as Array<{ id: number }>
         if (!batch.length) break
         // Hintergrund nur füllen, wenn die Vordergrund-Warteschlange leer ist
@@ -409,7 +483,7 @@ export class MediaProcessor {
         this.ctx.db
           .prepare(`UPDATE media SET thumb_status='error', thumb_error=COALESCE(thumb_error,'Keine Vorschau') WHERE id IN (${batch.map(() => '?').join(',')}) AND thumb_status='none'`)
           .run(...batch.map((b) => b.id))
-        const done = (this.ctx.db.prepare("SELECT COUNT(*) AS n FROM media WHERE project_id = ? AND location != 'missing' AND thumb_status != 'none'").get(projectId) as { n: number }).n
+        const done = (this.ctx.db.prepare("SELECT COUNT(*) AS n FROM media WHERE project_id = ? AND role = 'main' AND location != 'missing' AND thumb_status != 'none'").get(projectId) as { n: number }).n
         if (Date.now() - lastEmit > 400) {
           lastEmit = Date.now()
           onProgress(done, total, true)

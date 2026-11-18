@@ -29,8 +29,9 @@ export function listPackages(ctx: CoreContext, projectId: string): PackageInfo[]
   const rows = ctx.db
     .prepare(
       `SELECT k.*,
-        (SELECT COUNT(*) FROM media_packages mp WHERE mp.package_id = k.id) AS media_count,
-        (SELECT COUNT(*) FROM media_packages mp JOIN transfer_destinations d ON d.media_id = mp.media_id AND d.package_id = mp.package_id
+        (SELECT COUNT(*) FROM media_packages mp JOIN media m ON m.id = mp.media_id AND m.role = 'main' WHERE mp.package_id = k.id) AS media_count,
+        (SELECT COUNT(*) FROM media_packages mp JOIN media m ON m.id = mp.media_id AND m.role = 'main'
+           JOIN transfer_destinations d ON d.media_id = mp.media_id AND d.package_id = mp.package_id
            WHERE mp.package_id = k.id) AS exported_count,
         (SELECT COUNT(DISTINCT i.job_id) FROM job_items i WHERE i.package_id = k.id AND i.active = 1
            AND i.status NOT IN ('done','skipped','cancelled','failed')) AS active_jobs
@@ -141,6 +142,13 @@ export function updatePackage(
  * Löscht ein Paket inkl. seiner Zuordnungen. Bereits exportierte Dateien bleiben unangetastet.
  * Noch nicht gestartete Auftragseinträge für das Paket werden abgebrochen; laufende blockieren.
  */
+/** Reihenfolge der Pakete (Drag & Drop in der Seitenleiste). */
+export function reorderPackages(ctx: CoreContext, projectId: string, ids: string[]): void {
+  const upd = ctx.db.prepare('UPDATE packages SET sort_order = ? WHERE id = ? AND project_id = ?')
+  ctx.db.transaction(() => ids.forEach((id, i) => upd.run(i, id, projectId)))()
+  ctx.emit({ type: 'packages-changed', projectId })
+}
+
 export function deletePackage(ctx: CoreContext, packageId: string): { removedAssignments: number; cancelledItems: number } {
   const row = ctx.db.prepare('SELECT * FROM packages WHERE id = ?').get(packageId) as PackageRow | undefined
   if (!row) throw new PackageError('Paket nicht gefunden.')

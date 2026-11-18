@@ -16,6 +16,7 @@ import { commitNoOverwrite, exists, freeBytes, KeyedMutex, statOrNull, unlinkIfE
 import { numberedName, pathKey, TMP_PREFIX, TMP_SUFFIX } from './paths'
 import { SPACE_MARGIN, type PlanSnapshot } from './planner'
 import { getProject } from './projects'
+import { hideVolumeRecoveryDir, recoveryDirForSource } from './recovery'
 import { getSettings } from './settings'
 
 export class TransferError extends Error {
@@ -219,7 +220,7 @@ export class TransferEngine {
    * Legt einen Auftrag aus einem Snapshot an. Einträge, die bereits aktiv in einem anderen Auftrag
    * enthalten sind (Idempotenzschlüssel), werden übersprungen.
    */
-  createJob(snapshot: PlanSnapshot, mode: WorkMode, label: string): { jobId: string | null; created: number; skippedActive: number } {
+  createJob(snapshot: PlanSnapshot, mode: WorkMode, label: string, opts: { startAfter?: number | null } = {}): { jobId: string | null; created: number; skippedActive: number } {
     const db = this.ctx.db
     const t = this.ctx.now()
     const jobId = newId()
@@ -228,8 +229,8 @@ export class TransferEngine {
     let skippedActive = 0
     const tx = db.transaction(() => {
       db.prepare(
-        `INSERT INTO jobs (id, project_id, kind, mode, operation, conflict_policy, status, label, plan_json, created_at, updated_at)
-         VALUES (?,?,?,?,?,?,'queued',?,?,?,?)`
+        `INSERT INTO jobs (id, project_id, kind, mode, operation, conflict_policy, status, label, plan_json, created_at, updated_at, start_after)
+         VALUES (?,?,?,?,?,?,'queued',?,?,?,?,?)`
       ).run(
         jobId,
         snapshot.projectId,
@@ -240,7 +241,8 @@ export class TransferEngine {
         label,
         JSON.stringify({ planId: snapshot.id, copies: snapshot.copies.length, releases: snapshot.releases.length, recoveryDir: project.recoveryDir }),
         t,
-        t
+        t,
+        opts.startAfter ?? null
       )
       const ins = db.prepare(
         `INSERT INTO job_items (id, job_id, project_id, seq, kind, media_id, package_id, package_name, idempotency_key, file_name,
@@ -591,6 +593,9 @@ export class TransferEngine {
         "SELECT MIN(i.retry_at) AS t FROM job_items i JOIN jobs j ON j.id = i.job_id WHERE i.status='failed' AND i.retry_at IS NOT NULL AND j.status IN ('queued','running')"
       )
       .get() as { t: number | null }
+    const d = this.ctx.db.prepare("SELECT MIN(start_after) AS t FROM jobs WHERE status = 'queued' AND start_after IS NOT NULL").get() as { t: number | null }
+    const next = [r.t, d.t].filter((x): x is number => x != null)
+    if (next.length) r.t = Math.min(...next)
     if (r.t != null) {
       const delay = Math.max(50, r.t - this.ctx.now())
       this.timer = setTimeout(() => this.kick(), delay)
@@ -602,7 +607,9 @@ export class TransferEngine {
     const now = this.ctx.now()
     const db = this.ctx.db
     // Je Auftrag (älteste zuerst) nur wenige Kandidaten je Status lesen – nutzt idx_items_job_status_seq
-    const jobs = db.prepare("SELECT id FROM jobs WHERE status IN ('queued','running') ORDER BY created_at").all() as Array<{ id: string }>
+    const jobs = db
+      .prepare("SELECT id FROM jobs WHERE status IN ('queued','running') AND (start_after IS NULL OR start_after <= ?) ORDER BY created_at")
+      .all(now) as Array<{ id: string }>
     const byStatus = db.prepare('SELECT * FROM job_items WHERE job_id = ? AND status = ? ORDER BY seq LIMIT 64')
     const retries = db.prepare("SELECT * FROM job_items WHERE job_id = ? AND status = 'failed' AND retry_at IS NOT NULL AND retry_at <= ? ORDER BY seq LIMIT 16")
     const candidates: ItemRow[] = []
@@ -983,13 +990,21 @@ export class TransferEngine {
 
     const project = getProject(this.ctx, it.project_id)
     const month = new Date(this.ctx.now()).toISOString().slice(0, 7)
-    const recDir = path.join(project.recoveryDir, month, `${media.id}-${it.id.slice(0, 8)}`)
-    const recPath = path.join(recDir, media.file_name)
+    const sub = path.join(month, `${media.id}-${it.id.slice(0, 8)}`)
+    // Bevorzugt Wiederherstellungsbereich auf dem Laufwerk der Quelle (schnelles Umbenennen); sonst Standardort
+    let recDir = path.join(recoveryDirForSource(this.ctx, project, src), sub)
     try {
       await fs.promises.mkdir(recDir, { recursive: true })
-    } catch (e) {
-      throw new TransferError('RECOVERY_UNAVAILABLE', 'Wiederherstellungsbereich nicht beschreibbar: ' + (e as Error).message)
+      await hideVolumeRecoveryDir(recDir)
+    } catch {
+      recDir = path.join(project.recoveryDir, sub)
+      try {
+        await fs.promises.mkdir(recDir, { recursive: true })
+      } catch (e) {
+        throw new TransferError('RECOVERY_UNAVAILABLE', 'Wiederherstellungsbereich nicht beschreibbar: ' + (e as Error).message)
+      }
     }
+    const recPath = path.join(recDir, media.file_name)
     const recId = newId()
     const t = this.ctx.now()
     const recDev = (await fs.promises.stat(recDir)).dev

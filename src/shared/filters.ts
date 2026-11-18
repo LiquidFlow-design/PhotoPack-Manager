@@ -1,6 +1,9 @@
 // Reine Filter- und Sortierlogik. Wird im Renderer verwendet und per Unit-Test geprüft.
 import type { AssignmentIndex } from './assignment'
-import type { FilterState, MediaKind, MediaRow, SortState } from './types'
+import type { ColorLabel, FilterState, MediaKind, MediaRow, SortState } from './types'
+
+export const COLOR_LABEL: Record<ColorLabel, string> = { red: 'Rot', yellow: 'Gelb', green: 'Grün', blue: 'Blau', purple: 'Violett' }
+export const COLOR_HEX: Record<ColorLabel, string> = { red: '#e5534b', yellow: '#e3b341', green: '#46b37a', blue: '#4f8fe8', purple: '#a371f7' }
 import { KIND_LABEL } from './media-kinds'
 
 export const DEFAULT_FILTERS: FilterState = {
@@ -13,6 +16,8 @@ export const DEFAULT_FILTERS: FilterState = {
   dateTo: null,
   exportState: 'all',
   location: 'all',
+  minRating: 0,
+  colorLabels: [],
   search: ''
 }
 
@@ -48,6 +53,9 @@ export function matchesFilter(m: MediaRow, f: FilterState, ctx: FilterContext): 
   }
   if (f.duplicates === 'only' && !m.dupGroup) return false
   if (f.duplicates === 'none' && m.dupGroup) return false
+  if (f.duplicates === 'similar' && m.simGroup == null) return false
+  if (f.minRating > 0 && m.rating < f.minRating) return false
+  if (f.colorLabels.length && (!m.colorLabel || !f.colorLabels.includes(m.colorLabel))) return false
   if (f.location === 'moved' && m.location !== 'recovery') return false
   if (f.location === 'missing' && m.location !== 'missing') return false
   if (f.dateFrom && mediaDate(m) < dayStart(f.dateFrom)) return false
@@ -87,7 +95,8 @@ export function matchesFilter(m: MediaRow, f: FilterState, ctx: FilterContext): 
 
 const collator = new Intl.Collator('de', { numeric: true, sensitivity: 'base' })
 
-export function sortMedia(list: MediaRow[], s: SortState): MediaRow[] {
+/** order: eigene Reihenfolge (z. B. Position im Paket) für Sortierung 'custom'. */
+export function sortMedia(list: MediaRow[], s: SortState, order?: Map<number, number>): MediaRow[] {
   const dir = s.dir === 'asc' ? 1 : -1
   const byName = (a: MediaRow, b: MediaRow) => collator.compare(a.name, b.name) || a.id - b.id
   let cmp: (a: MediaRow, b: MediaRow) => number
@@ -104,16 +113,23 @@ export function sortMedia(list: MediaRow[], s: SortState): MediaRow[] {
     case 'folder':
       cmp = (a, b) => collator.compare(a.relDir, b.relDir) || byName(a, b)
       break
+    case 'rating':
+      cmp = (a, b) => a.rating - b.rating || byName(a, b)
+      break
+    case 'custom':
+      cmp = (a, b) => (order?.get(a.id) ?? Number.MAX_SAFE_INTEGER) - (order?.get(b.id) ?? Number.MAX_SAFE_INTEGER) || byName(a, b)
+      break
     default:
       cmp = byName
   }
   return list.slice().sort((a, b) => dir * cmp(a, b))
 }
 
-export function filterAndSort(all: MediaRow[], f: FilterState, s: SortState, ctx: FilterContext): MediaRow[] {
+export function filterAndSort(all: MediaRow[], f: FilterState, s: SortState, ctx: FilterContext, order?: Map<number, number>): MediaRow[] {
   return sortMedia(
     all.filter((m) => matchesFilter(m, f, ctx)),
-    s
+    s,
+    order
   )
 }
 
@@ -138,7 +154,14 @@ export function activeChips(f: FilterState, packageNames: Map<string, string>): 
       clear: (x) => ({ ...x, packageIds: x.packageIds.filter((y) => y !== p) })
     })
   if (f.duplicates !== 'all')
-    chips.push({ key: 'dup', label: f.duplicates === 'only' ? 'Nur Duplikate' : 'Ohne Duplikate', clear: (x) => ({ ...x, duplicates: 'all' }) })
+    chips.push({
+      key: 'dup',
+      label: f.duplicates === 'only' ? 'Nur Duplikate' : f.duplicates === 'similar' ? 'Ähnliche Bilder' : 'Ohne Duplikate',
+      clear: (x) => ({ ...x, duplicates: 'all' })
+    })
+  if (f.minRating > 0) chips.push({ key: 'rating', label: `Ab ${'★'.repeat(f.minRating)}`, clear: (x) => ({ ...x, minRating: 0 }) })
+  for (const c of f.colorLabels)
+    chips.push({ key: 'color:' + c, label: 'Farbe: ' + COLOR_LABEL[c], clear: (x) => ({ ...x, colorLabels: x.colorLabels.filter((y) => y !== c) }) })
   for (const e of f.formats)
     chips.push({ key: 'fmt:' + e, label: 'Format: ' + e.toUpperCase(), clear: (x) => ({ ...x, formats: x.formats.filter((y) => y !== e) }) })
   if (f.dateFrom) chips.push({ key: 'from', label: 'Ab ' + fmtDay(f.dateFrom), clear: (x) => ({ ...x, dateFrom: null }) })

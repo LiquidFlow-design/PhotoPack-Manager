@@ -6,6 +6,7 @@ import { exists, freeBytes, nearestExisting, statOrNull } from './fsx'
 import { effectiveTargetDir } from './packages'
 import { isInside, nameKey, numberedName, pathKey, volumeRoot } from './paths'
 import { getProject } from './projects'
+import { recoveryDirForSource } from './recovery'
 
 export interface PlannedCopy {
   mediaId: number
@@ -19,6 +20,7 @@ export interface PlannedCopy {
   destDir: string
   destName: string
   reexport: boolean
+  sidecar?: boolean
 }
 
 export interface PlannedRelease {
@@ -53,6 +55,8 @@ interface PairRow {
   sha256: string | null
   dest_path: string | null
   active_items: number
+  role: 'main' | 'sidecar'
+  parent_id: number | null
 }
 
 export const SPACE_MARGIN = 64 * 1024 * 1024
@@ -70,14 +74,14 @@ export async function buildPlan(
   const rows = ctx.db
     .prepare(
       `SELECT mp.media_id, mp.package_id, k.name AS package_name, k.target_dir, m.file_name, m.current_path, m.location,
-              m.size, m.mtime_ms, m.sha256, d.path AS dest_path,
+              m.size, m.mtime_ms, m.sha256, d.path AS dest_path, m.role, m.parent_id,
               (SELECT COUNT(*) FROM job_items i WHERE i.active = 1 AND i.kind = 'copy' AND i.media_id = mp.media_id AND i.package_id = mp.package_id) AS active_items
        FROM media_packages mp
        JOIN packages k ON k.id = mp.package_id
        JOIN media m ON m.id = mp.media_id
        LEFT JOIN transfer_destinations d ON d.media_id = mp.media_id AND d.package_id = mp.package_id
        WHERE m.project_id = ?
-       ORDER BY k.sort_order, k.created_at, m.file_name COLLATE NOCASE, m.original_path`
+       ORDER BY k.sort_order, k.created_at, (m.role = 'sidecar'), mp.position, m.file_name COLLATE NOCASE, m.original_path`
     )
     .all(projectId) as PairRow[]
 
@@ -92,6 +96,7 @@ export async function buildPlan(
   let inActiveJobs = 0
   let fromExportCopies = 0
   const createdDirs: string[] = []
+  const plannedNames = new Map<string, string>()
 
   const sources = ctx.db.prepare('SELECT path, real_path FROM sources WHERE project_id = ?').all(projectId) as Array<{ path: string; real_path: string }>
   const srcExistsCache = new Map<string, boolean>()
@@ -196,15 +201,30 @@ export async function buildPlan(
     }
     const taken = await namesIn(targetDir)
     let n = 1
-    let destName = r.file_name
+    let baseDest = r.file_name
+    if (r.role === 'sidecar' && r.parent_id) {
+      // Sidecar folgt dem Zielnamen seines Hauptmediums (z. B. „IMG_1 (2).CR3“ → „IMG_1 (2).CR3.xmp“)
+      const parent = plannedNames.get(`${r.parent_id}:${r.package_id}`)
+      if (parent) {
+        const pRow = rows.find((x) => x.media_id === r.parent_id)
+        const pOrig = pRow?.file_name ?? ''
+        if (pOrig && r.file_name.toLowerCase().startsWith(pOrig.toLowerCase())) baseDest = parent + r.file_name.slice(pOrig.length)
+        else {
+          const dot = parent.lastIndexOf('.')
+          baseDest = (dot > 0 ? parent.slice(0, dot) : parent) + r.file_name.slice(r.file_name.lastIndexOf('.'))
+        }
+      }
+    }
+    let destName = baseDest
     if (disk.has(nameKey(destName))) sum.existingConflicts++
     while (taken.has(nameKey(destName)) && !disk.has(nameKey(destName))) {
       // Kollision innerhalb dieses Plans
       n++
-      destName = numberedName(r.file_name, n)
+      destName = numberedName(baseDest, n)
     }
     if (n > 1) sum.nameCollisions++
     if (!disk.has(nameKey(destName))) taken.add(nameKey(destName))
+    plannedNames.set(`${r.media_id}:${r.package_id}`, destName)
 
     sum.items++
     sum.bytes += r.size
@@ -219,7 +239,8 @@ export async function buildPlan(
       srcSha256: r.sha256,
       destDir: targetDir,
       destName,
-      reexport: !!r.dest_path
+      reexport: !!r.dest_path,
+      sidecar: r.role === 'sidecar'
     })
   }
 
@@ -250,8 +271,8 @@ export async function buildPlan(
     need.set(root, (need.get(root) ?? 0) + c.srcSize)
   }
   if (releases.length) {
-    const recRoot = volumeRoot(project.recoveryDir)
     for (const r of releases) {
+      const recRoot = volumeRoot(recoveryDirForSource(ctx, project, r.srcPath))
       if (volumeRoot(r.srcPath) !== recRoot) need.set(recRoot, (need.get(recRoot) ?? 0) + r.srcSize)
     }
   }
@@ -290,7 +311,7 @@ export async function buildPlan(
     packages: [...pkgSummaries.values()],
     totalItems: copies.length,
     totalBytes: copies.reduce((a, c) => a + c.srcSize, 0),
-    mediaCount: new Set(copies.map((c) => c.mediaId)).size,
+    mediaCount: new Set(copies.filter((c) => !c.sidecar).map((c) => c.mediaId)).size,
     moveReleases: releases.length,
     missingSources,
     inActiveJobs,

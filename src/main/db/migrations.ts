@@ -214,5 +214,19 @@ CREATE INDEX idx_oplog_project ON operation_log(project_id, ts);
 `,
   /* 2: Index für effiziente Warteschlangenabfragen */ `
 CREATE INDEX idx_items_job_status_seq ON job_items(job_id, status, seq);
+`,
+  /* 3: Sidecars, RAW+JPEG-Paare, Bewertungen, Ähnlichkeit, Reihenfolge in Paketen, Startverzögerung */ `
+ALTER TABLE media ADD COLUMN role TEXT NOT NULL DEFAULT 'main' CHECK (role IN ('main','sidecar'));
+ALTER TABLE media ADD COLUMN parent_id INTEGER REFERENCES media(id) ON DELETE CASCADE;
+ALTER TABLE media ADD COLUMN pair_id INTEGER;
+ALTER TABLE media ADD COLUMN rating INTEGER NOT NULL DEFAULT 0 CHECK (rating BETWEEN 0 AND 5);
+ALTER TABLE media ADD COLUMN color_label TEXT CHECK (color_label IS NULL OR color_label IN ('red','yellow','green','blue','purple'));
+ALTER TABLE media ADD COLUMN phash TEXT;
+ALTER TABLE media ADD COLUMN sim_group INTEGER;
+CREATE INDEX idx_media_parent ON media(parent_id);
+ALTER TABLE media_packages ADD COLUMN position REAL NOT NULL DEFAULT 0;
+UPDATE media_packages SET position = assigned_at;
+CREATE INDEX idx_mp_pkg_pos ON media_packages(package_id, position);
+ALTER TABLE jobs ADD COLUMN start_after INTEGER;
 `
 ]

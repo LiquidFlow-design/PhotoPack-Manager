@@ -27,13 +27,5 @@ for (const dep of ['@img/sharp-win32-x64']) {
 const etPkg = JSON.parse(fs.readFileSync(path.join(nm, 'exiftool-vendored/package.json'), 'utf8'))
 packInto(`exiftool-vendored.exe@${etPkg.optionalDependencies['exiftool-vendored.exe']}`, path.join(nm, 'exiftool-vendored.exe'))
 
-if (!fs.existsSync(path.join(nm, 'ffmpeg-static/ffmpeg.exe'))) {
-  execFileSync(process.execPath, [path.join(nm, 'ffmpeg-static/install.js')], {
-    cwd: path.join(nm, 'ffmpeg-static'),
-    env: { ...process.env, npm_config_platform: 'win32', npm_config_arch: 'x64' },
-    stdio: 'inherit'
-  })
-}
-console.log('✓ ffmpeg.exe')
-if (!fs.existsSync(path.join(nm, 'ffprobe-static/bin/win32/x64/ffprobe.exe'))) throw new Error('ffprobe.exe fehlt')
-console.log('✓ ffprobe.exe')
+// Video-Werkzeuge: LGPL-Build von FFmpeg (siehe scripts/fetch-ffmpeg-lgpl.mjs)
+execFileSync(process.execPath, [path.join(root, 'scripts/fetch-ffmpeg-lgpl.mjs'), 'win32-x64'], { stdio: 'inherit' })

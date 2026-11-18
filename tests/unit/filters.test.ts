@@ -5,7 +5,7 @@ import type { FilterState, MediaRow } from '../../src/shared/types'
 
 function m(id: number, name: string, kind: MediaRow['kind'], extra: Partial<MediaRow> = {}): MediaRow {
   const ext = name.split('.').pop()!.toLowerCase()
-  return { id, sourceId: 's1', name, ext, kind, relDir: '', size: id * 100, mtimeMs: new Date(2026, 0, id).getTime(), capturedAt: null, width: null, height: null, durationMs: null, location: 'source', thumbStatus: 'ok', thumbError: null, dupGroup: null, hasHash: false, ...extra }
+  return { id, sourceId: 's1', name, ext, kind, relDir: '', size: id * 100, mtimeMs: new Date(2026, 0, id).getTime(), capturedAt: null, width: null, height: null, durationMs: null, location: 'source', thumbStatus: 'ok', thumbError: null, dupGroup: null, hasHash: false, pairId: null, sidecars: 0, rating: 0, colorLabel: null, simGroup: null, ...extra } as MediaRow
 }
 
 const media = [

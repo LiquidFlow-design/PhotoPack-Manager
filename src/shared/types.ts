@@ -25,6 +25,7 @@ export interface ProjectUiState {
   sort: SortState
   sourceId: string | null
   view: 'grid' | 'focus'
+  packageView: string | null // geöffnetes Paket (Paketansicht) oder null
 }
 
 export interface Project {
@@ -73,7 +74,14 @@ export interface MediaRow {
   thumbError: string | null
   dupGroup: string | null
   hasHash: boolean
+  pairId: number | null // RAW+JPEG-Partner
+  sidecars: number // Anzahl zugehöriger XMP-Sidecars
+  rating: number // 0–5
+  colorLabel: ColorLabel | null
+  simGroup: number | null // Gruppe visuell ähnlicher Medien
 }
+
+export type ColorLabel = 'red' | 'yellow' | 'green' | 'blue' | 'purple'
 
 export interface MediaDetail extends MediaRow {
   originalPath: string
@@ -122,7 +130,7 @@ export interface ExportedPair {
 // ---------- Filter ----------
 
 export type AssignmentFilter = 'all' | 'none' | 'any' | 'partial'
-export type DuplicateFilter = 'all' | 'only' | 'none'
+export type DuplicateFilter = 'all' | 'only' | 'none' | 'similar'
 export type ExportFilter = 'all' | 'exported' | 'pending'
 
 export interface FilterState {
@@ -135,10 +143,12 @@ export interface FilterState {
   dateTo: string | null
   exportState: ExportFilter
   location: 'all' | 'moved' | 'missing'
+  minRating: number // 0 = egal
+  colorLabels: ColorLabel[]
   search: string
 }
 
-export type SortKey = 'name' | 'date' | 'size' | 'type' | 'folder'
+export type SortKey = 'name' | 'date' | 'size' | 'type' | 'folder' | 'rating' | 'custom'
 export interface SortState {
   key: SortKey
   dir: 'asc' | 'desc'
@@ -273,6 +283,7 @@ export interface RecoveryItemInfo {
 
 export interface RecoveryOverview {
   dir: string
+  extraDirs: string[] // Wiederherstellungsbereiche auf weiteren Laufwerken
   items: RecoveryItemInfo[]
   heldBytes: number
   releasedBytes: number
@@ -285,6 +296,11 @@ export interface RecoveryOverview {
 export interface DuplicateGroup {
   sha256: string
   size: number
+  mediaIds: number[]
+}
+
+export interface SimilarGroup {
+  id: number
   mediaIds: number[]
 }
 
@@ -306,6 +322,11 @@ export interface AppSettings {
   }
   thumbSize: number
   lastProjectId: string | null
+  pairRawJpeg: boolean // RAW+JPEG gemeinsam zuordnen
+  includeSidecars: boolean // XMP-Sidecars mitkopieren/-verschieben
+  instantDelaySec: number // Gnadenfrist im Sofortmodus (0 = aus)
+  recoveryPerVolume: boolean // Wiederherstellungsbereich je Laufwerk
+  similarityThreshold: number // Hamming-Distanz für „ähnlich“
 }
 
 export const DEFAULT_SETTINGS: AppSettings = {
@@ -318,14 +339,19 @@ export const DEFAULT_SETTINGS: AppSettings = {
   reducedMotion: 'system',
   layout: { leftWidth: 240, rightWidth: 300, leftCollapsed: false, rightCollapsed: false },
   thumbSize: 170,
-  lastProjectId: null
+  lastProjectId: null,
+  pairRawJpeg: true,
+  includeSidecars: true,
+  instantDelaySec: 3,
+  recoveryPerVolume: true,
+  similarityThreshold: 8
 }
 
 // ---------- Hintergrundaufgaben / Events ----------
 
 export interface TaskProgress {
   id: string
-  kind: 'scan' | 'thumbs' | 'duplicates' | 'export' | 'recovery'
+  kind: 'scan' | 'thumbs' | 'duplicates' | 'similar' | 'export' | 'recovery' | 'zip'
   label: string
   done: number
   total: number
@@ -344,6 +370,9 @@ export type AppEvent =
   | { type: 'theme-changed'; dark: boolean }
   | { type: 'recovery-changed'; projectId: string }
   | { type: 'notice'; projectId: string | null; level: 'info' | 'warn' | 'error'; message: string }
+  | { type: 'presenter-show'; mediaId: number | null }
+  | { type: 'presenter-nav'; delta: number }
+  | { type: 'presenter-closed' }
 
 export interface StartupInfo {
   version: string

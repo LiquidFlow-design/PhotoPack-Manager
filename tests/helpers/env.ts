@@ -12,6 +12,7 @@ import { addSource, scanSource } from '../../src/main/core/sources'
 import { createPackage } from '../../src/main/core/packages'
 import { applyAssignments } from '../../src/main/core/assignments'
 import { buildPlan } from '../../src/main/core/planner'
+import { updateSettings } from '../../src/main/core/settings'
 import type { AppEvent, ConflictPolicy, Operation } from '../../src/shared/types'
 
 export interface TestEnv {
@@ -106,6 +107,7 @@ export async function makeEnv(
   env.ctx = createContext({ db: env.db, fileOps: opts.fileOps ?? inlineFileOps, dataDir, emit: (e) => events.push(e), now: () => clock.t, faults })
   env.engine = new TransferEngine(env.ctx, { concurrency: opts.concurrency ?? 2 })
   env.engine.start()
+  updateSettings(env.ctx, { instantDelaySec: 0 })
   const p = createProject(env.ctx, 'Testprojekt')
   env.projectId = p.id
   updateProjectSettings(env.ctx, p.id, { outputDir: outDir, recoveryDir: opts.recoveryDir ?? null })

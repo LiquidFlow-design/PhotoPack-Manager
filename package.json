@@ -1,0 +1,49 @@
+{
+  "name": "photopack-manager",
+  "productName": "PhotoPack Manager",
+  "version": "1.0.0-beta.1",
+  "description": "Lokale Desktop-Anwendung zum sicheren Verteilen großer Foto-, RAW- und Videosammlungen auf Pakete.",
+  "main": "out/main/index.js",
+  "author": "PhotoPack Manager",
+  "license": "UNLICENSED",
+  "private": true,
+  "type": "commonjs",
+  "scripts": {
+    "dev": "electron-vite dev",
+    "build": "electron-vite build",
+    "start": "electron-vite preview",
+    "typecheck": "tsc --noEmit -p tsconfig.node.json && tsc --noEmit -p tsconfig.web.json",
+    "test": "vitest run",
+    "test:watch": "vitest",
+    "test:perf": "vitest run --config vitest.perf.config.mts",
+    "test:e2e": "npm run build && playwright test --trace off",
+    "dist:win": "npm run build && electron-builder --win nsis portable --x64",
+    "dist:dir": "npm run build && electron-builder --dir"
+  },
+  "dependencies": {
+    "better-sqlite3": "^13.2.0",
+    "exiftool-vendored": "^39.4.0",
+    "ffmpeg-static": "^5.3.0",
+    "ffprobe-static": "^3.1.0",
+    "sharp": "^0.35.5",
+    "zod": "^4.6.7"
+  },
+  "devDependencies": {
+    "@playwright/test": "1.65",
+    "@tanstack/react-virtual": "^3.14.26",
+    "@types/node": "^22.20.5",
+    "@types/react": "^19.3.0",
+    "@types/react-dom": "^19.3.0",
+    "@vitejs/plugin-react": "^6.3.0",
+    "electron": "^44.11.4",
+    "electron-builder": "^26.18.0",
+    "electron-vite": "^6.0.0",
+    "lucide-react": "^1.75.0",
+    "react": "^19.3.1",
+    "react-dom": "^19.3.1",
+    "typescript": "~5.9",
+    "vite": "^8.3.8",
+    "vitest": "^5.1.1",
+    "zustand": "^5.1.0"
+  }
+}

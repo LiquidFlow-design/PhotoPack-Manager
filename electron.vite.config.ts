@@ -1,5 +1,6 @@
 import { resolve } from 'node:path'
-import { defineConfig, type Plugin } from 'electron-vite'
+import { defineConfig } from 'electron-vite'
+import type { Plugin } from 'vite'
 import react from '@vitejs/plugin-react'
 
 const alias = { '@shared': resolve(__dirname, 'src/shared') }
@@ -46,6 +47,7 @@ export default defineConfig({
   },
   renderer: {
     resolve: { alias },
-    plugins: [react(), csp()]
+    plugins: [react(), csp()],
+    build: { minify: true }
   }
 })

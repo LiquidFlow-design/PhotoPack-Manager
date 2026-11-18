@@ -35,6 +35,24 @@ interface MediaInfo {
   thumb_status: string
 }
 
+/** Begrenzt die Laufzeit externer Decoder – ein hängendes Werkzeug darf nichts blockieren. */
+export function withTimeout<T>(p: Promise<T>, ms: number, label: string): Promise<T> {
+  return new Promise<T>((resolve, reject) => {
+    const t = setTimeout(() => reject(new Error(`${label}: Zeitüberschreitung nach ${ms} ms`)), ms)
+    p.then(
+      (v) => {
+        clearTimeout(t)
+        resolve(v)
+      },
+      (e) => {
+        clearTimeout(t)
+        reject(e)
+      }
+    )
+  })
+}
+
+
 export const THUMB_PX = 400
 export const PREVIEW_PX = 2560
 const CACHE_VERSION = 'v1'
@@ -74,6 +92,7 @@ export class MediaProcessor {
   private sharp: Sharp | null = null
   private exiftool: ExifToolT | null = null
   private exiftoolFailed = false
+  private exiftoolErrors = 0
   private queue: QueueTask[] = []
   private inflight = new Map<string, Promise<string | null>>()
   private active = 0
@@ -84,7 +103,8 @@ export class MediaProcessor {
     private ctx: CoreContext,
     private cacheDir: string,
     private tools: ToolPaths,
-    private concurrency = 3
+    private concurrency = 3,
+    private exiftoolTimeout = 15000
   ) {
     try {
       // eslint-disable-next-line @typescript-eslint/no-require-imports
@@ -105,12 +125,37 @@ export class MediaProcessor {
     if (this.exiftoolFailed) return null
     try {
       const { ExifTool } = await import('exiftool-vendored')
-      this.exiftool = new ExifTool({ maxProcs: 2, taskTimeoutMillis: 20000 })
+      this.exiftool = new ExifTool({ maxProcs: 2, taskTimeoutMillis: this.exiftoolTimeout, maxTasksPerProcess: 2000 })
+      // Erreichbarkeit prüfen; schlägt dies fehl, wird ExifTool für diese Sitzung deaktiviert
+      await withTimeout(this.exiftool.version(), this.exiftoolTimeout, 'ExifTool')
       return this.exiftool
     } catch {
-      this.exiftoolFailed = true
+      this.disableExiftool()
       return null
     }
+  }
+
+  /** ExifTool-Aufruf mit Zeitlimit; wiederholte Fehler deaktivieren das Werkzeug (Rest der App läuft weiter). */
+  private async et<T>(fn: (et: ExifToolT) => Promise<T>): Promise<T | null> {
+    const et = await this.getExiftool()
+    if (!et) return null
+    try {
+      const r = await withTimeout(fn(et), this.exiftoolTimeout, 'ExifTool')
+      this.exiftoolErrors = 0
+      return r
+    } catch (e) {
+      if (/Zeitüberschreitung|ENOENT|spawn|EACCES/.test(String((e as Error)?.message))) {
+        if (++this.exiftoolErrors >= 3) this.disableExiftool()
+      }
+      return null
+    }
+  }
+
+  private disableExiftool(): void {
+    this.exiftoolFailed = true
+    const et = this.exiftool
+    this.exiftool = null
+    if (et) void et.end().catch(() => {})
   }
 
   async close(): Promise<void> {
@@ -185,8 +230,10 @@ export class MediaProcessor {
     if (fs.existsSync(out)) return out
     await fs.promises.mkdir(path.dirname(out), { recursive: true })
     try {
-      if (m.meta_status === 'none') await this.extractMeta(m).catch(() => {})
-      const buf = await this.render(m, t.kind === 'thumb' ? THUMB_PX : PREVIEW_PX, t.kind)
+      // Videos: Dauer vorab (für die Wahl des Vorschaubildes); sonst Metadaten nach der Vorschau
+      if (m.kind === 'video' && m.meta_status === 'none') await withTimeout(this.extractMeta(m), 20000, 'Metadaten').catch(() => {})
+      const buf = await withTimeout(this.render(m, t.kind === 'thumb' ? THUMB_PX : PREVIEW_PX, t.kind), 60000, 'Vorschau')
+      if (m.kind !== 'video' && m.meta_status === 'none') await withTimeout(this.extractMeta(m), 20000, 'Metadaten').catch(() => {})
       if (!buf) throw new Error('Keine Vorschau verfügbar')
       const tmp = out + '.' + process.pid + '.part'
       await fs.promises.writeFile(tmp, buf)
@@ -223,23 +270,16 @@ export class MediaProcessor {
   }
 
   private async rawPreview(file: string): Promise<Buffer | null> {
-    const et = await this.getExiftool()
-    if (!et) return null
     for (const tag of ['JpgFromRaw', 'PreviewImage', 'OtherImage', 'ThumbnailImage'] as const) {
-      try {
-        const buf = await et.extractBinaryTagToBuffer(tag, file)
-        if (buf && buf.length > 1000) {
-          // Ausrichtung der RAW-Datei auf die eingebettete Vorschau anwenden
-          const tags = (await et.read(file, { readArgs: ['-Orientation#', '-fast'] }).catch(() => null)) as { Orientation?: number } | null
-          const o = typeof tags?.Orientation === 'number' ? tags.Orientation : 1
-          if (o > 1 && this.sharp) {
-            return await this.sharp(buf).withMetadata({ orientation: o }).jpeg().toBuffer()
-          }
-          return buf
-        }
-      } catch {
-        /* nächstes Tag versuchen */
+      const buf = await this.et((et) => et.extractBinaryTagToBuffer(tag, file))
+      if (buf && buf.length > 1000) {
+        // Ausrichtung der RAW-Datei auf die eingebettete Vorschau anwenden
+        const tags = (await this.et((et) => et.read(file, { readArgs: ['-Orientation#', '-fast'] }))) as { Orientation?: number } | null
+        const o = typeof tags?.Orientation === 'number' ? tags.Orientation : 1
+        if (o > 1 && this.sharp) return await this.sharp(buf).withMetadata({ orientation: o }).jpeg().toBuffer()
+        return buf
       }
+      if (this.exiftoolFailed) break
     }
     return null
   }
@@ -326,9 +366,8 @@ export class MediaProcessor {
             height = (rotated ? md.width : md.height) ?? null
           }
         }
-        const et = await this.getExiftool()
-        if (et) {
-          const tags = (await et.read(m.current_path, { readArgs: ['-fast'] }).catch(() => null)) as Record<string, unknown> | null
+        {
+          const tags = (await this.et((et) => et.read(m.current_path, { readArgs: ['-fast'] }))) as Record<string, unknown> | null
           if (tags) {
             const dt = (tags.DateTimeOriginal ?? tags.CreateDate) as { toMillis?: () => number } | string | undefined
             if (dt && typeof dt === 'object' && typeof dt.toMillis === 'function') captured = dt.toMillis()

@@ -211,5 +211,8 @@ CREATE TABLE operation_log (
   details TEXT
 );
 CREATE INDEX idx_oplog_project ON operation_log(project_id, ts);
+`,
+  /* 2: Index für effiziente Warteschlangenabfragen */ `
+CREATE INDEX idx_items_job_status_seq ON job_items(job_id, status, seq);
 `
 ]

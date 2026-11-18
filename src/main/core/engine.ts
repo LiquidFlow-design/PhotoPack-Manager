@@ -600,14 +600,16 @@ export class TransferEngine {
 
   private nextRunnable(): ItemRow | null {
     const now = this.ctx.now()
-    const candidates = this.ctx.db
-      .prepare(
-        `SELECT i.* FROM job_items i JOIN jobs j ON j.id = i.job_id
-         WHERE j.status IN ('queued','running')
-           AND (i.status IN ('pending','waiting') OR (i.status = 'failed' AND i.retry_at IS NOT NULL AND i.retry_at <= ?))
-         ORDER BY j.created_at, i.seq LIMIT 500`
-      )
-      .all(now) as ItemRow[]
+    const db = this.ctx.db
+    // Je Auftrag (älteste zuerst) nur wenige Kandidaten je Status lesen – nutzt idx_items_job_status_seq
+    const jobs = db.prepare("SELECT id FROM jobs WHERE status IN ('queued','running') ORDER BY created_at").all() as Array<{ id: string }>
+    const byStatus = db.prepare('SELECT * FROM job_items WHERE job_id = ? AND status = ? ORDER BY seq LIMIT 64')
+    const retries = db.prepare("SELECT * FROM job_items WHERE job_id = ? AND status = 'failed' AND retry_at IS NOT NULL AND retry_at <= ? ORDER BY seq LIMIT 16")
+    const candidates: ItemRow[] = []
+    for (const j of jobs) {
+      candidates.push(...(byStatus.all(j.id, 'pending') as ItemRow[]), ...(retries.all(j.id, now) as ItemRow[]), ...(byStatus.all(j.id, 'waiting') as ItemRow[]))
+      if (candidates.length >= 64) break
+    }
     for (const it of candidates) {
       if (this.inflight.has(it.id)) continue
       if (it.media_id != null && this.busyMedia.has(it.media_id)) continue
@@ -747,16 +749,13 @@ export class TransferEngine {
   private finalizeJobs(): void {
     const db = this.ctx.db
     const open = db.prepare("SELECT id, project_id FROM jobs WHERE status IN ('queued','running')").all() as Array<{ id: string; project_id: string }>
+    const hasOpen = db.prepare(
+      `SELECT 1 FROM job_items WHERE job_id = ? AND status IN ('pending','waiting','copying','verifying','committing','recovery_copying','recovery_committed','source_removing') LIMIT 1`
+    )
+    const hasRetry = db.prepare("SELECT 1 FROM job_items WHERE job_id = ? AND status = 'failed' AND retry_at IS NOT NULL LIMIT 1")
+    const hasFailed = db.prepare("SELECT 1 FROM job_items WHERE job_id = ? AND status = 'failed' LIMIT 1")
     for (const j of open) {
-      const c = db
-        .prepare(
-          `SELECT
-             SUM(CASE WHEN status IN ('pending','waiting','copying','verifying','committing','recovery_copying','recovery_committed','source_removing')
-                       OR (status='failed' AND retry_at IS NOT NULL) THEN 1 ELSE 0 END) AS open,
-             SUM(CASE WHEN status='failed' THEN 1 ELSE 0 END) AS failed
-           FROM job_items WHERE job_id = ?`
-        )
-        .get(j.id) as { open: number | null; failed: number | null }
+      const c = { open: hasOpen.get(j.id) || hasRetry.get(j.id) ? 1 : 0, failed: hasFailed.get(j.id) ? 1 : 0 }
       if ((c.open ?? 0) > 0) continue
       if ([...this.inflight.values()].some((f) => f.jobId === j.id)) continue
       const t = this.ctx.now()

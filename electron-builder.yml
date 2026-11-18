@@ -1,0 +1,65 @@
+appId: de.photopack.manager
+productName: PhotoPack Manager
+copyright: PhotoPack Manager
+directories:
+  output: release
+  buildResources: resources
+files:
+  - out/**
+  - package.json
+  - '!**/*.map'
+asar: true
+asarUnpack:
+  - '**/node_modules/sharp/**'
+  - '**/node_modules/@img/**'
+  - '**/node_modules/ffmpeg-static/**'
+  - '**/node_modules/ffprobe-static/**'
+  - '**/node_modules/exiftool-vendored.exe/**'
+  - '**/node_modules/exiftool-vendored.pl/**'
+  - '**/node_modules/better-sqlite3/**'
+# Native Module liegen als N-API-Prebuilds vor -> kein Neukompilieren nötig
+npmRebuild: false
+nodeGypRebuild: false
+win:
+  # Nur Windows-x64-Binärdateien ausliefern
+  files:
+    - '!**/node_modules/ffprobe-static/bin/darwin/**'
+    - '!**/node_modules/ffprobe-static/bin/linux/**'
+    - '!**/node_modules/ffprobe-static/bin/win32/ia32/**'
+    - '!**/node_modules/ffmpeg-static/ffmpeg'
+    - '!**/node_modules/exiftool-vendored.pl/**'
+    - '!**/node_modules/@img/sharp-linux*/**'
+    - '!**/node_modules/@img/sharp-libvips-linux*/**'
+    - '!**/node_modules/@img/sharp-wasm32/**'
+    - '!**/node_modules/better-sqlite3/prebuilds/{darwin,linux,linuxmusl}-*.node'
+    - '!**/node_modules/better-sqlite3/{src,deps}/**'
+    - '!**/node_modules/better-sqlite3/prebuilds/win32-arm64.node'
+  target:
+    - target: nsis
+      arch: [x64]
+    - target: portable
+      arch: [x64]
+  icon: resources/icon.png
+  # Icon/Versionsinfo per rcedit setzen (unter Linux/macOS via Wine). Signiert wird nur, wenn ein
+  # Zertifikat konfiguriert ist (CSC_LINK / CSC_KEY_PASSWORD bzw. win.azureSignOptions) – siehe README.
+  signAndEditExecutable: true
+  artifactName: '${productName}-${version}-win-x64.${ext}'
+nsis:
+  oneClick: false
+  perMachine: false
+  allowToChangeInstallationDirectory: true
+  createDesktopShortcut: true
+  shortcutName: PhotoPack Manager
+  artifactName: '${productName}-${version}-Setup.${ext}'
+portable:
+  artifactName: '${productName}-${version}-portable.${ext}'
+linux:
+  target: [dir]
+  files:
+    - '!**/node_modules/ffprobe-static/bin/{darwin,win32}/**'
+    - '!**/node_modules/ffmpeg-static/ffmpeg.exe'
+    - '!**/node_modules/exiftool-vendored.exe/**'
+    - '!**/node_modules/@img/sharp-win32*/**'
+extraResources:
+  - from: THIRD_PARTY_NOTICES.md
+    to: THIRD_PARTY_NOTICES.md

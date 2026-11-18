@@ -130,7 +130,7 @@ test.describe.serial('PhotoPack Manager – Kern-Workflows', () => {
     await (await tile('VID_0001.mp4')).dblclick()
     const video = page.locator('.stage video')
     await expect(video).toBeVisible()
-    expect(await video.evaluate((v: HTMLVideoElement) => v.autoplay)).toBe(false)
+    expect(await video.evaluate((v) => (v as unknown as { autoplay: boolean }).autoplay)).toBe(false)
     await page.keyboard.press('Escape')
   })
 

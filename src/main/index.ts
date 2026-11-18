@@ -1,0 +1,143 @@
+// Einstiegspunkt des Main-Prozesses.
+import path from 'node:path'
+import { app, BrowserWindow, dialog, nativeTheme, session, shell } from 'electron'
+import { EVENT_CHANNEL } from '@shared/api'
+import type { AppEvent } from '@shared/types'
+import { AppService } from './services/app-service'
+import { registerIpc, onThemeChange } from './ipc'
+import { registerProtocol, registerSchemePrivileges } from './protocol'
+import { WorkerFileOps } from './core/worker-pool'
+import { inlineFileOps } from './core/fileops'
+import { getSettings } from './core/settings'
+
+// Testumgebungen können einen eigenen Datenordner setzen (niemals Nutzerdaten in Tests)
+if (process.env.PPM_USER_DATA) app.setPath('userData', process.env.PPM_USER_DATA)
+
+registerSchemePrivileges()
+
+let svc: AppService | null = null
+let win: BrowserWindow | null = null
+let quitting = false
+
+// Nur eine Instanz: verhindert konkurrierende Schreibzugriffe auf Datenbank und Dateien
+if (!app.requestSingleInstanceLock()) {
+  app.quit()
+} else {
+  app.on('second-instance', () => {
+    if (win) {
+      if (win.isMinimized()) win.restore()
+      win.focus()
+    }
+  })
+  void app.whenReady().then(start)
+}
+
+function send(e: AppEvent): void {
+  if (win && !win.isDestroyed()) win.webContents.send(EVENT_CHANNEL, e)
+}
+
+async function start(): Promise<void> {
+  const dataDir = app.getPath('userData')
+  let fileOps
+  try {
+    fileOps = new WorkerFileOps(path.join(__dirname, 'file-worker.js'), 2)
+  } catch {
+    fileOps = inlineFileOps
+  }
+  try {
+    svc = new AppService(dataDir, fileOps, send)
+    await svc.init()
+  } catch (e) {
+    dialog.showErrorBox('PhotoPack Manager', 'Die Datenbank konnte nicht geöffnet werden:\n' + (e as Error).message)
+    app.exit(1)
+    return
+  }
+
+  const theme = getSettings(svc.ctx).theme
+  nativeTheme.themeSource = theme
+  onThemeChange((t) => {
+    nativeTheme.themeSource = t
+  })
+  nativeTheme.on('updated', () => send({ type: 'theme-changed', dark: nativeTheme.shouldUseDarkColors }))
+
+  // Keine Berechtigungen (Kamera, Mikrofon, Benachrichtigungen …) für den Renderer
+  session.defaultSession.setPermissionRequestHandler((_wc, _perm, cb) => cb(false))
+
+  registerProtocol(() => svc)
+  registerIpc(() => {
+    if (!svc) throw new Error('Dienst nicht bereit')
+    return svc
+  })
+  createWindow()
+}
+
+function createWindow(): void {
+  const dark = nativeTheme.shouldUseDarkColors
+  win = new BrowserWindow({
+    width: 1440,
+    height: 900,
+    minWidth: 760,
+    minHeight: 560,
+    show: false,
+    title: 'PhotoPack Manager',
+    backgroundColor: dark ? '#0c111b' : '#eef2f8',
+    autoHideMenuBar: true,
+    webPreferences: {
+      preload: path.join(__dirname, '../preload/index.js'),
+      contextIsolation: true,
+      nodeIntegration: false,
+      sandbox: true,
+      webSecurity: true,
+      spellcheck: false
+    }
+  })
+  win.setMenuBarVisibility(false)
+  win.once('ready-to-show', () => win?.show())
+  // Keine Navigation / keine neuen Fenster aus dem Renderer
+  win.webContents.on('will-navigate', (e, url) => {
+    if (url !== win?.webContents.getURL()) e.preventDefault()
+  })
+  win.webContents.setWindowOpenHandler(({ url }) => {
+    if (/^https:\/\//.test(url)) void shell.openExternal(url)
+    return { action: 'deny' }
+  })
+  win.on('close', (e) => {
+    if (quitting || !svc) return
+    if (svc.engine.hasActiveWork()) {
+      const r = dialog.showMessageBoxSync(win!, {
+        type: 'question',
+        buttons: ['Pausieren und beenden', 'Abbrechen'],
+        defaultId: 1,
+        cancelId: 1,
+        title: 'Aufträge laufen',
+        message: 'Es laufen noch Übertragungen.',
+        detail: 'Beim Beenden werden laufende Aufträge sicher pausiert (Zwischendateien werden entfernt). Sie können beim nächsten Start fortgesetzt werden.'
+      })
+      if (r === 1) {
+        e.preventDefault()
+        return
+      }
+    }
+  })
+
+  if (process.env.ELECTRON_RENDERER_URL) void win.loadURL(process.env.ELECTRON_RENDERER_URL)
+  else void win.loadFile(path.join(__dirname, '../renderer/index.html'))
+}
+
+app.on('before-quit', (e) => {
+  if (quitting || !svc) return
+  e.preventDefault()
+  quitting = true
+  const s = svc
+  void s
+    .shutdown()
+    .catch(() => {})
+    .finally(() => {
+      svc = null
+      app.quit()
+    })
+})
+
+app.on('window-all-closed', () => {
+  app.quit()
+})

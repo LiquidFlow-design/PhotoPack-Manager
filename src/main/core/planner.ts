@@ -91,6 +91,7 @@ export async function buildPlan(
   let missingSources = 0
   let inActiveJobs = 0
   let fromExportCopies = 0
+  const createdDirs: string[] = []
 
   const sources = ctx.db.prepare('SELECT path, real_path FROM sources WHERE project_id = ?').all(projectId) as Array<{ path: string; real_path: string }>
   const srcExistsCache = new Map<string, boolean>()
@@ -148,7 +149,7 @@ export async function buildPlan(
           sum.problems.push('Zielordner bzw. Laufwerk ist nicht erreichbar.')
           blocking.push(`Zielordner von „${r.package_name}“ ist nicht erreichbar.`)
         } else if (pathKey(base) !== pathKey(targetDir)) {
-          warnings.push(`Zielordner von „${r.package_name}“ wird angelegt: ${targetDir}`)
+          createdDirs.push(targetDir)
         }
       }
     }
@@ -263,6 +264,8 @@ export async function buildPlan(
     if (!ok) blocking.push(`Nicht genügend Speicherplatz auf ${root} (benötigt ca. ${fmtBytes(bytes)}, frei ${fmtBytes(free ?? 0)}).`)
   }
 
+  if (createdDirs.length === 1) warnings.push(`Zielordner wird angelegt: ${createdDirs[0]}`)
+  else if (createdDirs.length > 1) warnings.push(`${createdDirs.length} Zielordner werden angelegt (je Paket ein Unterordner).`)
   if (fromExportCopies) warnings.push(`${fromExportCopies} Zuordnung(en) werden aus einer verifizierten Exportkopie bedient (Original nicht mehr vorhanden).`)
   if (missingSources) warnings.push(`${missingSources} Zuordnung(en) übersprungen: Quelldatei fehlt.`)
   if (inActiveJobs) warnings.push(`${inActiveJobs} Zuordnung(en) sind bereits in einem laufenden Auftrag enthalten.`)

@@ -24,4 +24,4 @@ export function extOf(fileName: string): string {
 /** Formate, die Chromium direkt anzeigen kann (Fokusansicht ohne Konvertierung). */
 export const BROWSER_NATIVE_IMAGE = new Set(['jpg', 'jpeg', 'jpe', 'png', 'webp', 'gif', 'bmp', 'avif'])
 
-export const KIND_LABEL: Record<MediaKind, string> = { image: 'Foto', raw: 'RAW', video: 'Video' }
+export const KIND_LABEL: Record<MediaKind, string> = { image: 'Bild', raw: 'RAW', video: 'Video' }

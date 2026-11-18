@@ -1,5 +1,6 @@
 import { X } from 'lucide-react'
-import { useEffect, useMemo, useRef } from 'react'
+import { useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react'
+import { createPortal } from 'react-dom'
 import { activeFilterCount, resetFilters } from '@shared/filters'
 import type { AssignmentFilter, DuplicateFilter, ExportFilter, FilterState, MediaKind } from '@shared/types'
 import { useStore } from '../state/store'
@@ -21,6 +22,21 @@ export function FilterPopover() {
   const s = useStore()
   const { filters: f, packages, media } = s
   const ref = useRef<HTMLDivElement>(null)
+  // Feste Positionierung am Filter-Icon (Popover darf nicht vom Inhaltsbereich abgeschnitten werden)
+  const [pos, setPos] = useState<{ top: number; left: number; maxH: number }>({ top: 0, left: 0, maxH: 600 })
+  useLayoutEffect(() => {
+    const place = () => {
+      const b = document.getElementById('filter-button')?.getBoundingClientRect()
+      if (!b) return
+      const w = 320
+      const left = Math.max(12, Math.min(window.innerWidth - w - 12, b.right - w))
+      const top = b.bottom + 8
+      setPos({ top, left, maxH: Math.max(240, window.innerHeight - top - 16) })
+    }
+    place()
+    window.addEventListener('resize', place)
+    return () => window.removeEventListener('resize', place)
+  }, [])
   const set = (patch: Partial<FilterState>) => s.setFilters({ ...useStore.getState().filters, ...patch })
   const formats = useMemo(() => {
     const m = new Map<string, number>()
@@ -54,8 +70,15 @@ export function FilterPopover() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [])
 
-  return (
-    <div className="popover glass" id="filter-popover" role="dialog" aria-label="Medien filtern" ref={ref}>
+  return createPortal(
+    <div
+      className="popover glass"
+      id="filter-popover"
+      role="dialog"
+      aria-label="Medien filtern"
+      ref={ref}
+      style={{ position: 'fixed', top: pos.top, left: pos.left, right: 'auto', maxHeight: pos.maxH }}
+    >
       <div className="row" style={{ justifyContent: 'space-between' }}>
         <h3>Medien filtern</h3>
         <button className="icon-btn ghost sm" aria-label="Filter schließen" onClick={() => s.setFilterOpen(false)}>
@@ -157,9 +180,9 @@ export function FilterPopover() {
       <div className="pop-section">
         <span className="field-label">Aufnahmedatum (ersatzweise Änderungsdatum)</span>
         <div className="row" style={{ marginTop: 5 }}>
-          <input className="input" type="date" aria-label="Datum von" value={f.dateFrom ?? ''} onChange={(e) => set({ dateFrom: e.target.value || null })} />
+          <input className="input" style={{ minWidth: 0, flex: 1 }} type="date" aria-label="Datum von" value={f.dateFrom ?? ''} onChange={(e) => set({ dateFrom: e.target.value || null })} />
           <span className="muted">–</span>
-          <input className="input" type="date" aria-label="Datum bis" value={f.dateTo ?? ''} onChange={(e) => set({ dateTo: e.target.value || null })} />
+          <input className="input" style={{ minWidth: 0, flex: 1 }} type="date" aria-label="Datum bis" value={f.dateTo ?? ''} onChange={(e) => set({ dateTo: e.target.value || null })} />
         </div>
       </div>
 
@@ -167,5 +190,7 @@ export function FilterPopover() {
         Filter zurücksetzen
       </button>
     </div>
+  ,
+    document.body
   )
 }

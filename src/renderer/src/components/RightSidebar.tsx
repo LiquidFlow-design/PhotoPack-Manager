@@ -159,7 +159,7 @@ export function RightSidebar({ collapsed, auto }: { collapsed: boolean; auto: bo
         <div className="divider" />
         <div className="h-section">Auswahl</div>
         <div className="small" aria-live="polite">
-          {selection.size ? `${selection.size.toLocaleString('de-DE')} Medien ausgewählt` : 'Keine Medien ausgewählt'}
+          {selection.size ? `${selection.size.toLocaleString('de-DE')} ${selection.size === 1 ? 'Medium' : 'Medien'} ausgewählt` : 'Keine Medien ausgewählt'}
         </div>
         <p className="hint" style={{ margin: '6px 0 8px' }}>
           Klick auf ein Paket oder Taste 1–9 ordnet zu. Bei Mehrfachauswahl: teilweise → ergänzen, alle → entfernen. Strg+Z macht rückgängig.

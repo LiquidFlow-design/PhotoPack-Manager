@@ -266,6 +266,23 @@ describe('Verschieben mit Wiederherstellungsbereich', () => {
     expect(listFiles(env.outDir)).toEqual(['Anna/a.jpg'])
   })
 
+  it('Fehler nach atomarem Verschieben: Zustand bleibt konsistent', async () => {
+    const data = content('nach-rename', 10_000)
+    env = await makeEnv({ 'a.jpg': data })
+    const A = pkg(env, 'Anna')
+    const m = mediaId(env, 'a.jpg')
+    await assign(env, [[m, A]])
+    env.faults.on('release:afterSourceRemoved', () => {
+      throw Object.assign(new Error('simulierter E/A-Fehler'), { code: 'EIO' })
+    })
+    const { jobId } = await exportAll(env, 'move')
+    expect(jobStatus(env, jobId!)).toBe('completed')
+    const row = mediaRow(env, m)
+    expect(row.location).toBe('recovery')
+    expect(readSha(row.current_path)).toBe(sha(data))
+    expect((env.db.prepare('SELECT status FROM recovery_items WHERE media_id = ?').get(m) as { status: string }).status).toBe('held')
+  })
+
   it('Entfernen einer Zuordnung löscht keine exportierte Datei', async () => {
     env = await makeEnv({ 'a.jpg': content('a') })
     const A = pkg(env, 'Anna')
@@ -370,6 +387,37 @@ describe('Auftragssteuerung und Idempotenz', () => {
     await env.engine.waitIdle()
     expect(items(env, jobId!).map((i) => i.kind)).toEqual(['copy'])
     expect(fs.existsSync(path.join(env.srcDir, 'a.jpg'))).toBe(true)
+  })
+
+  it('Moduswechsel während eines laufenden Sofortauftrags: Auftrag läuft weiter, kein Doppelexport', async () => {
+    env = await makeEnv({ 'a.jpg': content('a'), 'b.jpg': content('b') })
+    updateProjectSettings(env.ctx, env.projectId, { workMode: 'instant', operation: 'move' })
+    const A = pkg(env, 'Anna')
+    const e = env
+    let switched = false
+    env.faults.on('copy:afterTmpWritten', () => {
+      if (!switched) {
+        switched = true
+        updateProjectSettings(e.ctx, e.projectId, { workMode: 'collect', operation: 'copy' })
+      }
+    })
+    const r = await assign(env, [
+      [mediaId(env, 'a.jpg'), A],
+      [mediaId(env, 'b.jpg'), A]
+    ])
+    await env.engine.waitIdle()
+    expect(switched).toBe(true)
+    expect(jobStatus(env, r.jobId!)).toBe('completed')
+    // Snapshot (Verschieben) wurde vollständig ausgeführt
+    expect(fs.existsSync(path.join(env.srcDir, 'a.jpg'))).toBe(false)
+    expect(listFiles(env.outDir)).toEqual(['Anna/a.jpg', 'Anna/b.jpg'])
+    // Sammelexport danach: nichts mehr zu tun
+    const p = await buildPlan(env.ctx, env.projectId, { packageIds: null, operation: 'copy', conflictPolicy: 'rename', reexportMissing: false })
+    expect(p.preview.totalItems).toBe(0)
+    // Neue Zuordnung im Sammelmodus erzeugt keinen Sofortauftrag
+    const B = pkg(env, 'Max')
+    const r2 = await assign(env, [[mediaId(env, 'a.jpg'), B]])
+    expect(r2.jobId).toBeNull()
   })
 
   it('Pause, Fortsetzen und Abbruch', async () => {

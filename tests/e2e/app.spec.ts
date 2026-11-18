@@ -90,6 +90,37 @@ test.describe.serial('PhotoPack Manager – Kern-Workflows', () => {
     await page.keyboard.press('Escape')
   })
 
+  test('Schnellzuordnung: automatisch weiter und „mehrere wählen, dann Enter“', async () => {
+    const { page } = h
+    const qa = page.locator('#qa-mode')
+    await qa.selectOption('advance')
+    await (await tile('IMG_0008.jpg')).click()
+    await page.keyboard.press('2')
+    await expect(page.locator('.tile.active .tile-name')).toHaveText('IMG_0009.jpg')
+    await (await tile('IMG_0008.jpg')).click()
+    await expect(page.getByRole('button', { name: /^Max, Taste 2/ })).toHaveAttribute('aria-pressed', 'true')
+    await qa.selectOption('stage')
+    await (await tile('IMG_0010.jpg')).click()
+    await page.keyboard.press('1')
+    await page.keyboard.press('3')
+    await expect(page.locator('.pkg.staged')).toHaveCount(2)
+    await page.keyboard.press('Enter')
+    await expect(page.locator('.tile.active .tile-name')).toHaveText('IMG_0011.jpg')
+    await (await tile('IMG_0010.jpg')).click()
+    await expect(page.getByRole('button', { name: /^Anna, Taste 1/ })).toHaveAttribute('aria-pressed', 'true')
+    await expect(page.getByRole('button', { name: /^Familie, Taste 3/ })).toHaveAttribute('aria-pressed', 'true')
+    await expect(page.getByRole('button', { name: /^Max, Taste 2/ })).toHaveAttribute('aria-pressed', 'false')
+    // Rückgängig nimmt beide gebündelten Zuordnungen zurück
+    await page.keyboard.press('Control+z')
+    await expect(page.getByRole('button', { name: /^Anna, Taste 1/ })).toHaveAttribute('aria-pressed', 'false')
+    await expect(page.getByRole('button', { name: /^Familie, Taste 3/ })).toHaveAttribute('aria-pressed', 'false')
+    // Max-Zuordnung von IMG_0008 entfernen, damit spätere Zählungen stimmen
+    await (await tile('IMG_0008.jpg')).click()
+    await qa.selectOption('stay')
+    await page.keyboard.press('2')
+    await expect(page.getByRole('button', { name: /^Max, Taste 2/ })).toHaveAttribute('aria-pressed', 'false')
+  })
+
   test('Filter-Popover: Kombinationen, Chips, Clear-all, Tastatur', async () => {
     const { page } = h
     const btn = page.locator('#filter-button')

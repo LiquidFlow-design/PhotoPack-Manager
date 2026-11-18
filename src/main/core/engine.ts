@@ -704,7 +704,11 @@ export class TransferEngine {
     } catch {
       /* best effort */
     }
-    if (cur.kind === 'release_source' && cur.recovery_item_id) await this.discardStagedRecovery(cur)
+    if (cur.kind === 'release_source' && cur.recovery_item_id) {
+      // Quelle bereits (atomar) verschoben und Kopie im Wiederherstellungsbereich gültig? Dann abschließen statt verwerfen.
+      if (await this.completeIfMoved(cur)) return
+      await this.discardStagedRecovery(cur)
+    }
     if (e instanceof AbortError) {
       const job = this.job(cur.job_id)
       const next: JobItemStatus = job.status === 'cancelled' ? 'cancelled' : cur.kind === 'release_source' ? 'waiting' : 'pending'
@@ -732,6 +736,22 @@ export class TransferEngine {
       willRetry ? 'automatischer neuer Versuch geplant' : undefined
     )
     oplog(this.ctx, cur.project_id, 'error', `item.${cur.kind}.failed`, 'job_item', cur.id, { code: te.code, message: te.message, file: cur.file_name })
+  }
+
+  private async completeIfMoved(it: ItemRow): Promise<boolean> {
+    const rec = this.ctx.db.prepare('SELECT * FROM recovery_items WHERE id = ?').get(it.recovery_item_id) as
+      | { id: string; recovery_path: string; sha256: string; status: string }
+      | undefined
+    if (!rec || rec.status !== 'staging') return false
+    const media = it.media_id ? this.media(it.media_id) : null
+    const srcPath = media?.location === 'source' ? media.current_path : it.src_path
+    if (await exists(srcPath)) return false
+    const st = await statOrNull(rec.recovery_path)
+    if (!st || st.size !== it.src_size) return false
+    const h = await this.ctx.fileOps.hashFile(rec.recovery_path)
+    if (h.sha256 !== rec.sha256) return false
+    this.commitRelease(it, rec.id, rec.recovery_path, rec.sha256, 'nach Fehler abgeschlossen (Quelle bereits gesichert)')
+    return true
   }
 
   private async discardStagedRecovery(it: ItemRow): Promise<void> {

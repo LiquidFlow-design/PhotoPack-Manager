@@ -624,8 +624,16 @@ export const useStore = create<State & Actions>((set, get) => {
     },
 
     async updateSettings(patch) {
-      const settings = await api.app.updateSettings(patch)
-      set({ settings })
+      // Optimistisch: Tastenkürzel direkt nach einem Moduswechsel sollen bereits den neuen Modus nutzen
+      const prev = get().settings
+      if (prev) set({ settings: { ...prev, ...patch } })
+      try {
+        const settings = await api.app.updateSettings(patch)
+        set({ settings })
+      } catch (e) {
+        if (prev) set({ settings: prev })
+        get().toast('error', `Einstellung nicht gespeichert: ${(e as Error).message}`)
+      }
     },
 
     toast(level, text, action) {

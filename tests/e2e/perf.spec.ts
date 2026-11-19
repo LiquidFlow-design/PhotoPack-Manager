@@ -92,8 +92,8 @@ test('12.000 Medien: Laden, Scrollen, Auswahl, Zuordnung', async () => {
     fs.mkdirSync(path.resolve(__dirname, '../../.tmp-tests'), { recursive: true })
     fs.writeFileSync(path.resolve(__dirname, '../../.tmp-tests/ui-perf.json'), JSON.stringify(r, null, 2))
     await h.close()
-    fs.rmSync(root, { recursive: true, force: true })
-    fs.rmSync(h.userData, { recursive: true, force: true })
+    fs.rmSync(root, { recursive: true, force: true, maxRetries: 10, retryDelay: 300 })
+    fs.rmSync(h.userData, { recursive: true, force: true, maxRetries: 10, retryDelay: 300 })
   }
   expect(r.dom_tiles).toBeLessThan(400)
 })

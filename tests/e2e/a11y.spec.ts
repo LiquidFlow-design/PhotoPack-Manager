@@ -68,7 +68,7 @@ test('axe: keine schwerwiegenden Verstöße', async () => {
     fs.mkdirSync(path.resolve(__dirname, '../../.tmp-tests'), { recursive: true })
     fs.writeFileSync(path.resolve(__dirname, '../../.tmp-tests/a11y.json'), JSON.stringify(report, null, 2))
     await h.close()
-    fs.rmSync(root, { recursive: true, force: true })
+    fs.rmSync(root, { recursive: true, force: true, maxRetries: 10, retryDelay: 300 })
   }
   const all = Object.entries(report).flatMap(([k, v]) => v.map((x) => `${k}: ${x}`))
   expect(all, all.join('\n')).toEqual([])

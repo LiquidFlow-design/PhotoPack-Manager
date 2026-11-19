@@ -3,7 +3,7 @@ import { execFileSync } from 'node:child_process'
 import fs from 'node:fs'
 import os from 'node:os'
 import path from 'node:path'
-import { launch, stubDirDialog, type AppHandle } from './helpers'
+import { cleanup, launch, revealTile, stubDirDialog, type AppHandle } from './helpers'
 
 // Nur generierte Testdaten in temporären Ordnern
 const root = fs.mkdtempSync(path.join(os.tmpdir(), 'ppm-e2e-data-'))
@@ -15,12 +15,12 @@ test.beforeAll(() => {
   execFileSync(process.execPath, [path.resolve(__dirname, '../../scripts/gen-test-media.mjs'), media, '12', '--videos'], { stdio: 'ignore' })
   fs.mkdirSync(out, { recursive: true })
 })
-test.afterAll(() => fs.rmSync(root, { recursive: true, force: true }))
+test.afterAll(() => cleanup(root))
 
 let h: AppHandle
 
 async function tile(name: string) {
-  return h.page.locator('.tile', { has: h.page.locator('.tile-name', { hasText: new RegExp(`^${name.replace('.', '\\.')}$`) }) }).first()
+  return revealTile(h.page, name)
 }
 
 test.describe.serial('PhotoPack Manager – Kern-Workflows', () => {
@@ -216,12 +216,12 @@ test.describe.serial('PhotoPack Manager – Kern-Workflows', () => {
     await page.getByRole('button', { name: /^Farbschema/ }).click() // hell -> dunkel
     await expect(page.locator('html')).toHaveAttribute('data-theme', 'dark')
     // Fensterlage wird gespeichert (Windows-Erwartung: öffnet wie geschlossen)
-    await h.app.evaluate(({ BrowserWindow }) => BrowserWindow.getAllWindows()[0].setBounds({ x: 40, y: 30, width: 1111, height: 700 }))
+    await h.app.evaluate(({ BrowserWindow }) => BrowserWindow.getAllWindows()[0].setBounds({ x: 40, y: 30, width: 900, height: 620 }))
     await page.waitForTimeout(800)
     await h.close()
     h = await launch(userData)
     const b = await h.app.evaluate(({ BrowserWindow }) => BrowserWindow.getAllWindows()[0].getBounds())
-    expect([b.width, b.height]).toEqual([1111, 700])
+    expect([b.width, b.height]).toEqual([900, 620])
     const p2 = h.page
     await expect(p2.getByText(/von 25 Medien/)).toBeVisible()
     await expect(p2.locator('html')).toHaveAttribute('data-theme', 'dark')

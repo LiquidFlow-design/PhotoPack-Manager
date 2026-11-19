@@ -287,10 +287,17 @@ const Tile = memo(function Tile({
               <Star size={10} fill="currentColor" /> {m.rating}
             </span>
           )}
-          <span className="pkg-dots" aria-hidden="true">
-            {pkgs.slice(0, 8).map(({ p, exported }) => (
-              <span key={p.id} className={'pkg-dot' + (exported ? '' : ' pending')} style={{ ['--pkg' as string]: p.color }} title={`${p.name}${exported ? ' (exportiert)' : ' (ausstehend)'}`} />
+          <span className="pkg-pills" aria-hidden="true">
+            {pkgs.slice(0, 2).map(({ p, exported }) => (
+              <span key={p.id} className={'pkg-pill' + (exported ? '' : ' pending')} style={{ ['--pkg' as string]: p.color }} title={`${p.name}${exported ? ' (exportiert)' : ' (ausstehend)'}`}>
+                {p.name.length > 10 ? p.name.slice(0, 9) + '…' : p.name}
+              </span>
             ))}
+            {pkgs.length > 2 && (
+              <span className="pkg-pill" style={{ ['--pkg' as string]: '#8b7bff' }} title={pkgs.slice(2).map((x) => x.p.name).join(', ')}>
+                +{pkgs.length - 2}
+              </span>
+            )}
           </span>
         </div>
       </div>

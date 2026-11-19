@@ -4,9 +4,11 @@ import fs from 'node:fs'
 import path from 'node:path'
 import { app, BrowserWindow, dialog, ipcMain, shell } from 'electron'
 import { z } from 'zod'
-import { API_METHODS, DROP_CHANNEL, channel, type AddSourceResult, type ChooseDirResult, type Result } from '@shared/api'
+import { API_METHODS, DROP_CHANNEL, channel, releasePageUrl, type AddSourceResult, type ChooseDirResult, type Result } from '@shared/api'
 import { DEFAULT_SETTINGS, type AppSettings, type ColorLabel } from '@shared/types'
 import type { AppService } from './services/app-service'
+import type { Updater } from './services/updater'
+import { writeLaunchFlags } from './launch-flags'
 import { createProject, deleteProject, getProject, renameProject, saveUiState, updateProjectSettings } from './core/projects'
 import { addSource, checkSourcePath, listSources, removeSource, targetConflictsWithSources } from './core/sources'
 import { createPackage, deletePackage, listPackages, updatePackage } from './core/packages'
@@ -69,7 +71,9 @@ const settingsPatch = z
     includeSidecars: z.boolean(),
     instantDelaySec: z.number().int().min(0).max(30),
     recoveryPerVolume: z.boolean(),
-    similarityThreshold: z.number().int().min(2).max(20)
+    similarityThreshold: z.number().int().min(2).max(20),
+    updateCheck: z.boolean(),
+    hardwareAcceleration: z.boolean()
   })
   .partial()
   .strict()
@@ -129,6 +133,10 @@ export interface WindowHooks {
   presenterNav(delta: number): void
   isPresenterOpen(): boolean
   presenterCurrent(): number | null
+  updater(): Updater | null
+  relaunch(): void
+  /** Grafikbeschleunigung laut Startoptionen dieser Sitzung */
+  launchGpu(): boolean
 }
 
 async function pickSave(title: string, defaultPath: string, filters: Electron.FileFilter[]): Promise<string | null> {
@@ -158,7 +166,8 @@ export function registerIpc(getSvc: () => AppService, win: WindowHooks): void {
             interruptedJobs: s.interruptedJobs,
             tools: s.media.status(),
             fileOps: s.fileOpsMode,
-            portable: s.portable
+            portable: s.portable,
+            gpu: win.launchGpu()
           }
         }
       },
@@ -166,8 +175,11 @@ export function registerIpc(getSvc: () => AppService, win: WindowHooks): void {
       updateSettings: {
         args: z.tuple([settingsPatch]),
         fn: (patch: Partial<AppSettings>) => {
-          const s = getSvc().updateSettings({ ...patch })
+          const svc = getSvc()
+          const s = svc.updateSettings({ ...patch })
           if (patch.theme) applyTheme(s.theme)
+          // Wirkt erst beim nächsten Start (muss vor „ready“ feststehen)
+          if (patch.hardwareAcceleration !== undefined) writeLaunchFlags(svc.dataDir, { hardwareAcceleration: s.hardwareAcceleration })
           return s
         }
       },
@@ -178,7 +190,23 @@ export function registerIpc(getSvc: () => AppService, win: WindowHooks): void {
       presenterShow: { args: z.tuple([mediaId.nullable()]), fn: (m: number | null) => win.presenterShow(m) },
       presenterNav: { args: z.tuple([z.number().int().min(-1000).max(1000)]), fn: (d: number) => win.presenterNav(d) },
       presenterOpen: { args: z.tuple([]), fn: () => win.isPresenterOpen() },
-      presenterCurrent: { args: z.tuple([]), fn: () => win.presenterCurrent() }
+      presenterCurrent: { args: z.tuple([]), fn: () => win.presenterCurrent() },
+      updateStatus: { args: z.tuple([]), fn: () => win.updater()?.status() ?? null },
+      checkForUpdates: {
+        args: z.tuple([]),
+        fn: async () => {
+          const u = win.updater()
+          if (!u) throw new Error('Updates sind nicht verfügbar.')
+          return u.check(true)
+        }
+      },
+      installUpdate: {
+        args: z.tuple([]),
+        fn: () => win.updater()?.install() ?? { ok: false, message: 'Updates sind nicht verfügbar.' }
+      },
+      // Feste GitHub-Adresse – der Renderer kann keine beliebigen URLs öffnen
+      openReleasePage: { args: z.tuple([]), fn: () => shell.openExternal(releasePageUrl(win.updater()?.status().version)) },
+      relaunch: { args: z.tuple([]), fn: () => win.relaunch() }
     },
     projects: {
       list: { args: z.tuple([]), fn: () => getSvc().projects() },

@@ -26,6 +26,13 @@ electronFuses:
 # Native Module liegen als N-API-Prebuilds vor -> kein Neukompilieren nötig
 npmRebuild: false
 nodeGypRebuild: false
+# Updates über GitHub-Releases: erzeugt resources/app-update.yml und latest.yml (Installer).
+# Hochgeladen wird nicht von electron-builder (--publish never), sondern vom Release-Workflow.
+publish:
+  - provider: github
+    owner: LiquidFlow-design
+    repo: PhotoPack-Manager
+    releaseType: release
 win:
   # Nur Windows-x64-Binärdateien ausliefern
   files:

@@ -26,6 +26,7 @@ import type {
   Source,
   StartupInfo,
   TaskProgress,
+  UpdateStatus,
   WorkMode
 } from './types'
 
@@ -60,6 +61,11 @@ export interface PpmApi {
     presenterNav(delta: number): Promise<void>
     presenterOpen(): Promise<boolean>
     presenterCurrent(): Promise<number | null>
+    updateStatus(): Promise<UpdateStatus | null>
+    checkForUpdates(): Promise<UpdateStatus>
+    installUpdate(): Promise<{ ok: boolean; message?: string }>
+    openReleasePage(): Promise<void>
+    relaunch(): Promise<void>
   }
   projects: {
     list(): Promise<ProjectSummary[]>
@@ -146,7 +152,7 @@ export interface PpmApi {
 
 /** Liste aller Methoden je Gruppe – Preload und Main leiten daraus Kanalnamen ab. */
 export const API_METHODS = {
-  app: ['startup', 'getSettings', 'updateSettings', 'clearThumbCache', 'openLogFolder', 'openPresenter', 'closePresenter', 'presenterShow', 'presenterNav', 'presenterOpen', 'presenterCurrent'],
+  app: ['startup', 'getSettings', 'updateSettings', 'clearThumbCache', 'openLogFolder', 'openPresenter', 'closePresenter', 'presenterShow', 'presenterNav', 'presenterOpen', 'presenterCurrent', 'updateStatus', 'checkForUpdates', 'installUpdate', 'openReleasePage', 'relaunch'],
   projects: [
     'list',
     'create',
@@ -175,5 +181,11 @@ export const API_METHODS = {
 } as const
 
 export const EVENT_CHANNEL = 'ppm:event'
+
+/** GitHub-Repository für Updates und Release-Seiten */
+export const UPDATE_REPO = { owner: 'LiquidFlow-design', repo: 'PhotoPack-Manager' } as const
+export const releasePageUrl = (version?: string | null): string =>
+  `https://github.com/${UPDATE_REPO.owner}/${UPDATE_REPO.repo}/releases` +
+  (version && /^\d+\.\d+\.\d+(-[0-9A-Za-z.]+)?$/.test(version) ? `/tag/v${version}` : '')
 export const DROP_CHANNEL = 'ppm:sources.addDropped'
 export const channel = (group: string, method: string): string => `ppm:${group}.${method}`

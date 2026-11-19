@@ -338,6 +338,8 @@ export interface AppSettings {
   instantDelaySec: number // Gnadenfrist im Sofortmodus (0 = aus)
   recoveryPerVolume: boolean // Wiederherstellungsbereich je Laufwerk
   similarityThreshold: number // Hamming-Distanz für „ähnlich“
+  updateCheck: boolean // beim Start auf GitHub nach neuen Versionen suchen
+  hardwareAcceleration: boolean // GPU-Beschleunigung (wirkt nach Neustart)
 }
 
 export const DEFAULT_SETTINGS: AppSettings = {
@@ -355,7 +357,26 @@ export const DEFAULT_SETTINGS: AppSettings = {
   includeSidecars: true,
   instantDelaySec: 3,
   recoveryPerVolume: true,
-  similarityThreshold: 8
+  similarityThreshold: 8,
+  updateCheck: true,
+  hardwareAcceleration: true
+}
+
+// ---------- Updates (GitHub-Releases) ----------
+
+/** Installationsart: nur die Installer-Version kann sich selbst aktualisieren. */
+export type InstallKind = 'nsis' | 'portable' | 'zip' | 'dev' | 'unsupported'
+
+export interface UpdateStatus {
+  state: 'disabled' | 'idle' | 'checking' | 'none' | 'available' | 'downloading' | 'ready' | 'error'
+  kind: InstallKind
+  /** auto = herunterladen und beim Beenden installieren; manual = nur Hinweis mit Link */
+  install: 'auto' | 'manual' | 'unavailable'
+  currentVersion: string
+  version: string | null
+  percent: number | null
+  checkedAt: number | null
+  error: string | null
 }
 
 // ---------- Hintergrundaufgaben / Events ----------
@@ -385,6 +406,7 @@ export type AppEvent =
   | { type: 'presenter-nav'; delta: number }
   | { type: 'presenter-closed' }
   | { type: 'job-finished'; projectId: string; jobId: string; status: JobStatus; mode: WorkMode; label: string; done: number; failed: number }
+  | { type: 'update-status'; status: UpdateStatus; manual: boolean }
 
 export interface StartupInfo {
   version: string
@@ -395,6 +417,8 @@ export interface StartupInfo {
   tools: { exiftool: boolean; ffmpeg: boolean; ffprobe: boolean; sharp: boolean }
   fileOps: 'worker' | 'inline'
   portable: { dir: string | null; fallback: boolean }
+  /** Grafikbeschleunigung beim Start dieser Sitzung eingeschaltet */
+  gpu: boolean
 }
 
 export interface ProjectBundle {

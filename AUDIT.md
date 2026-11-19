@@ -40,6 +40,7 @@ Beeinträchtigung, **N** = gering.
 | A18 | Sicherheit | N | IPC akzeptierte im fertigen Programm auch `http://localhost`-Absender. | Nur im Entwicklungsmodus. | Code |
 | A19 | Windows | N | Ohne Installer fehlte die AppUserModelId (Taskleisten-Gruppierung der portablen Version). | Gesetzt. | Code |
 | A20 | Bedienung · langsame Rechner | N | Gefunden im ersten CI-Lauf auf Windows: Eine Paket-Taste direkt nach dem Wechsel des Schnellzuordnungsmodus nutzte noch den alten Modus, weil Einstellungen erst nach dem IPC-Rundweg übernommen wurden. | Einstellungen werden sofort übernommen, bei Speicherfehler zurückgesetzt und gemeldet. | E2E „Schnellzuordnung …“ auf `windows-latest` |
+| A21 | Windows · Grafik | N | Gemeldet: Mauszeiger über der Paketleiste doppelt sichtbar. Die App zeichnet keinen eigenen Zeiger; unter Linux nicht nachstellbar. | Einstellung „Grafikbeschleunigung“ (wirkt nach Neustart) als Abhilfe; Wirkung auf dem betroffenen Rechner noch zu bestätigen. | E2E „Einstellungen: Updates … Grafikbeschleunigung“ |
 
 ## 2. Geprüft ohne Befund
 
@@ -82,6 +83,14 @@ Bitte auf einem echten PC durchgehen (je ✓/✗ notieren). Ich werte die Ergebn
 - [ ] Zweiter Start bringt das vorhandene Fenster nach vorn (keine zweite Instanz).
 - [ ] Fenster öffnet nach Neustart mit gleicher Größe/Position (auch maximiert; auch nach Abziehen des 2. Monitors sichtbar).
 - [ ] Einstellungen → Programmdaten zeigt „Decoder: Bilder ✓, RAW/EXIF ✓, Video ✓“.
+
+**Updates & Grafik (ab 1.0.0-beta.2)**
+- [ ] Installer-Version: Einstellungen → Updates → „Nach Updates suchen“ meldet „Auf dem neuesten Stand“ (bzw. eine neuere Version).
+- [ ] Sobald eine neuere Version erscheint: Hinweis „Version … ist bereit“, „Jetzt neu starten“ installiert sie; Daten und Projekte bleiben erhalten.
+- [ ] Update während eines laufenden Exports: „Jetzt neu starten“ wird abgelehnt, Installation erfolgt erst nach dem Beenden.
+- [ ] Portable EXE/ZIP: Hinweis „Version … ist verfügbar“ mit „Herunterladen“ (öffnet die Release-Seite).
+- [ ] Ohne Internet: keine Fehlermeldung beim Start; manuelle Suche meldet „GitHub ist nicht erreichbar“.
+- [ ] Doppelter Mauszeiger über der Paketleiste: Grafikbeschleunigung aus → Neu starten → Fehler weg?
 
 **Quellen**
 - [ ] Ordner auf C:, auf externer USB-Festplatte, auf SD-Karte, auf Netzlaufwerk (UNC und Laufwerksbuchstabe).

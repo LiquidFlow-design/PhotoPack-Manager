@@ -12,6 +12,7 @@ Lizenztexte liegen im jeweiligen Paket (`node_modules/<paket>/LICENSE*`) bzw. ne
 | FFmpeg / FFprobe (LGPL-Build, BtbN/FFmpeg-Builds) | Video-Thumbnails, Video-Metadaten | **LGPL-2.1-or-later**, gemeinsame DLLs in `resources/ffmpeg` (austauschbar) |
 | ffmpeg-static / ffprobe-static | nur Entwicklung und Tests, nicht ausgeliefert | GPL-3.0-or-later (Binärdatei) / MIT |
 | yazl | ZIP-Export | MIT |
+| electron-updater (+ builder-util-runtime, js-yaml, semver, fs-extra u. a.) | Updates über GitHub-Releases | MIT |
 | React, React DOM | Oberfläche | MIT |
 | zustand | Zustandsverwaltung | MIT |
 | @tanstack/react-virtual | Virtualisiertes Raster | MIT |

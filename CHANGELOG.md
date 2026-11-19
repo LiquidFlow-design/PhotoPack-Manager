@@ -1,5 +1,22 @@
 # Änderungsprotokoll
 
+## 1.0.0-beta.2 – Updates über GitHub (19.11.2026)
+
+### Neu
+- **Updates über GitHub-Releases:** Die Installer-Version sucht beim Start nach einer neuen Version, lädt sie im
+  Hintergrund und installiert sie beim Beenden (oder sofort über „Jetzt neu starten“). Portable EXE und ZIP melden
+  neue Versionen mit Link zum Download. Einstellungen → Updates: „Nach Updates suchen“, Suche beim Start abschaltbar.
+  Laufende Übertragungen werden nie für ein Update unterbrochen.
+- **Grafikbeschleunigung abschaltbar** (Einstellungen → System, wirkt nach Neustart) – Abhilfe bei
+  Darstellungsfehlern einzelner Grafiktreiber, z. B. doppelt angezeigtem Mauszeiger über der Paketleiste.
+
+### Behoben
+- Paket-Taste direkt nach dem Wechsel der Schnellzuordnung nutzte auf langsamen Rechnern noch den alten Modus.
+
+### Hinweis
+- Version 1.0.0-beta.1 enthält noch keine Update-Funktion: beta.2 bitte einmal manuell installieren.
+  Ab dann kommen Updates automatisch.
+
 ## 1.0.0-beta.1 – erster Test-Release (19.11.2026)
 
 Erste testbare Version für Windows 10/11 (64 Bit). **Testversion** – bitte zunächst nur mit Kopien bzw.

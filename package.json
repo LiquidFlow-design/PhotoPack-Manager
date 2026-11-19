@@ -1,7 +1,7 @@
 {
   "name": "photopack-manager",
   "productName": "PhotoPack Manager",
-  "version": "1.0.0-beta.1",
+  "version": "1.0.0-beta.2",
   "description": "Lokale Desktop-Anwendung zum sicheren Verteilen großer Foto-, RAW- und Videosammlungen auf Pakete.",
   "main": "out/main/index.js",
   "author": "PhotoPack Manager",
@@ -17,12 +17,13 @@
     "test:watch": "vitest",
     "test:perf": "vitest run --config vitest.perf.config.mts",
     "test:e2e": "npm run build && playwright test --trace off",
-    "dist:win": "npm run build && node scripts/fetch-ffmpeg-lgpl.mjs win32-x64 && electron-builder --win nsis portable --x64",
-    "dist:dir": "npm run build && electron-builder --dir",
+    "dist:win": "npm run build && node scripts/fetch-ffmpeg-lgpl.mjs win32-x64 && electron-builder --win nsis portable --x64 --publish never",
+    "dist:dir": "npm run build && electron-builder --dir --publish never",
     "fetch:ffmpeg": "node scripts/fetch-ffmpeg-lgpl.mjs"
   },
   "dependencies": {
     "better-sqlite3": "^13.2.0",
+    "electron-updater": "^6.8.11",
     "exiftool-vendored": "^39.4.0",
     "sharp": "^0.35.5",
     "yazl": "^3.3.1",

@@ -10,6 +10,10 @@ import { registerProtocol, registerSchemePrivileges } from './protocol'
 import { WorkerFileOps } from './core/worker-pool'
 import { inlineFileOps } from './core/fileops'
 import { getSettings } from './core/settings'
+import { autoUpdater } from 'electron-updater'
+import { UPDATE_REPO } from '@shared/api'
+import { Updater, detectInstallKind, type UpdaterBackend } from './services/updater'
+import { readLaunchFlags, writeLaunchFlags } from './launch-flags'
 
 // Datenordner: Tests → PPM_USER_DATA; portable EXE → „PhotoPack-Daten“ neben der EXE; ZIP-Version → dort,
 // wenn der Ordner „PhotoPack-Daten“ neben der EXE existiert; sonst %APPDATA%\PhotoPack Manager.
@@ -39,6 +43,11 @@ function selectDataDir(): void {
 }
 selectDataDir()
 
+// Grafikbeschleunigung abschaltbar (Einstellungen → System): hilft bei Darstellungsfehlern einzelner
+// Grafiktreiber, z. B. doppelt gezeichnetem Mauszeiger. Muss vor „ready“ feststehen.
+const launchFlags = readLaunchFlags(app.getPath('userData'))
+if (!launchFlags.hardwareAcceleration) app.disableHardwareAcceleration()
+
 registerSchemePrivileges()
 // Eindeutige Kennung für Taskleiste/Benachrichtigungen (auch für die portable Version)
 if (process.platform === 'win32') app.setAppUserModelId('de.photopack.manager')
@@ -48,6 +57,7 @@ let win: BrowserWindow | null = null
 let presenter: BrowserWindow | null = null
 let presenterMedia: number | null = null
 let quitting = false
+let updater: Updater | null = null
 
 // Nur eine Instanz: verhindert konkurrierende Schreibzugriffe auf Datenbank und Dateien
 if (!app.requestSingleInstanceLock()) {
@@ -208,10 +218,53 @@ async function start(): Promise<void> {
       },
       presenterNav: (delta) => send({ type: 'presenter-nav', delta }),
       isPresenterOpen: () => !!presenter && !presenter.isDestroyed(),
-      presenterCurrent: () => presenterMedia
+      presenterCurrent: () => presenterMedia,
+      updater: () => updater,
+      launchGpu: () => launchFlags.hardwareAcceleration,
+      relaunch: () => {
+        if (svc?.engine.hasActiveWork()) throw new Error('Es laufen noch Übertragungen. Bitte nach deren Abschluss neu starten.')
+        app.relaunch()
+        app.quit()
+      }
     }
   )
+  // Einstellung und Startdatei abgleichen (z. B. nach Wiederherstellung einer Sicherung)
+  const hw = getSettings(svc.ctx).hardwareAcceleration
+  if (hw !== launchFlags.hardwareAcceleration) {
+    try {
+      writeLaunchFlags(svc.dataDir, { hardwareAcceleration: hw })
+    } catch {
+      /* wirkt dann erst nach erneutem Umschalten */
+    }
+  }
+  setupUpdater()
   createWindow()
+}
+
+/** Updates über GitHub-Releases; Prüfung einmal pro Start, sofern nicht abgeschaltet. */
+function setupUpdater(): void {
+  const kind = detectInstallKind({
+    packaged: app.isPackaged,
+    platform: process.platform,
+    portableEnv: process.env.PORTABLE_EXECUTABLE_DIR,
+    exePath: app.getPath('exe'),
+    productName: app.getName(),
+    exists: (p) => fs.existsSync(p)
+  })
+  updater = new Updater({
+    kind,
+    currentVersion: app.getVersion(),
+    emit: (status, manual) => send({ type: 'update-status', status, manual }),
+    hasActiveWork: () => !!svc?.engine.hasActiveWork(),
+    createBackend: () => {
+      autoUpdater.setFeedURL({ provider: 'github', owner: UPDATE_REPO.owner, repo: UPDATE_REPO.repo })
+      autoUpdater.logger = null
+      return autoUpdater as unknown as UpdaterBackend
+    }
+  })
+  if (updater.status().state === 'disabled' || !svc || !getSettings(svc.ctx).updateCheck) return
+  // Etwas Abstand zum Start, damit Indexierung und Oberfläche Vorrang haben
+  setTimeout(() => void updater?.check(false), 8000).unref()
 }
 
 interface WinState {

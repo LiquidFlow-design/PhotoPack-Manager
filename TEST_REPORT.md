@@ -13,14 +13,14 @@ generierte Dateien in temporären Ordnern.
 
 | Suite | Befehl | Ergebnis |
 |---|---|---|
-| Unit + Integration (Vitest) | `npm test` | **114 / 114 bestanden** (13 Dateien) – mit Node.js 26.13.1 |
-| Electron-E2E (Playwright) | `npm run test:e2e` | **21 / 21 bestanden** (Kern 10, Version 2/3 9, Barrierefreiheit 1, UI-Leistung 1) – Electron 45.4.1 |
+| Unit + Integration (Vitest) | `npm test` | **123 / 123 bestanden** (14 Dateien, inkl. Update-Logik) – mit Node.js 26.13.1 |
+| Electron-E2E (Playwright) | `npm run test:e2e` | **22 / 22 bestanden** (Kern 11, Version 2/3 9, Barrierefreiheit 1, UI-Leistung 1) – Electron 45.4.1 |
 | E2E gegen **gepacktes** Programm | `PPM_E2E_EXE=release/linux-unpacked/photopack-manager npx playwright test app features` | **19 / 19 bestanden** (asar, Worker, Decoder im Paketzustand; Build mit für Tests gelockerten Fuses, siehe DECISIONS G4) |
 | Barrierefreiheit (axe-core) | `npx playwright test a11y` | 22 Ansichten/Dialoge, hell + dunkel: **keine** schwerwiegenden/kritischen Verstöße |
 | Skalierung 12 000 Medien (Vitest) | `npm run test:perf` | **7 / 7 bestanden** |
 | Typprüfung | `npm run typecheck` | fehlerfrei (Main, Renderer, E2E) |
 | Gepackte App (Linux-Variante desselben asar-Layouts) | `node scripts/smoke.mjs … release/linux-unpacked/photopack-manager` | Start, Indexierung, Vorschauen (Bild/Video), Decoder-Status ok |
-| **CI auf echtem Windows** (GitHub Actions, `windows-latest`) | `.github/workflows/ci.yml` | Typprüfung, 114 Unit-/Integrationstests, Build und **20 / 20 Electron-E2E** (Kern, Version 2/3, Barrierefreiheit) **bestanden**; ebenso auf `ubuntu-latest`. Der erste Windows-Lauf fand einen Wettlauf beim Wechsel des Schnellzuordnungsmodus (Einstellung erst nach IPC-Rundweg aktiv) – behoben, siehe AUDIT. |
+| **CI auf echtem Windows** (GitHub Actions, `windows-latest`) | `.github/workflows/ci.yml` | Typprüfung, Unit-/Integrationstests, Build und alle Electron-E2E (Stand beta.1: 114 + 20, beta.2: 123 + 21) (Kern, Version 2/3, Barrierefreiheit) **bestanden**; ebenso auf `ubuntu-latest`. Der erste Windows-Lauf fand einen Wettlauf beim Wechsel des Schnellzuordnungsmodus (Einstellung erst nach IPC-Rundweg aktiv) – behoben, siehe AUDIT. |
 | Windows-Build | `electron-builder --win portable zip --x64` | Stand Version 1: portable EXE + ZIP erzeugt; NSIS nicht (Wine-Absturz). **Version 2 nicht neu gebaut**: Der Download des LGPL-FFmpeg wurde in dieser Umgebung durch die Zugriffsrichtlinie blockiert. |
 
 ## 2. Abdeckung der Pflicht-Testfälle (Auftrag §9)

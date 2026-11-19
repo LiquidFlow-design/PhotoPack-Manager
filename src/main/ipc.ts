@@ -149,7 +149,8 @@ export function registerIpc(getSvc: () => AppService, win: WindowHooks): void {
             userDataDir: s.dataDir,
             dbPath: s.dbPath,
             interruptedJobs: s.interruptedJobs,
-            tools: s.media.status()
+            tools: s.media.status(),
+            fileOps: s.fileOpsMode
           }
         }
       },

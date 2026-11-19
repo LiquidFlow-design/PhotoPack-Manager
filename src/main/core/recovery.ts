@@ -45,6 +45,45 @@ export function recoveryDirForSource(ctx: CoreContext, project: Project, srcPath
   return path.win32.join(srcRoot, VOLUME_RECOVERY_DIR, project.id)
 }
 
+const driveTypes = new Map<string, Promise<string | null>>()
+
+/** Windows-Laufwerkstyp (Fixed, Removable, Network, CDRom …) über .NET DriveInfo; zwischengespeichert. */
+export function windowsDriveType(root: string): Promise<string | null> {
+  if (process.platform !== 'win32') return Promise.resolve(null)
+  const key = root.slice(0, 2).toUpperCase()
+  let p = driveTypes.get(key)
+  if (!p) {
+    p = new Promise((resolve) =>
+      execFile(
+        'powershell.exe',
+        ['-NoProfile', '-NonInteractive', '-Command', '[System.IO.DriveInfo]::new($env:PPM_DRIVE).DriveType.ToString()'],
+        { windowsHide: true, timeout: 10000, env: { ...process.env, PPM_DRIVE: key + '\\' } },
+        (err, out) => resolve(err ? null : String(out).trim() || null)
+      )
+    )
+    driveTypes.set(key, p)
+  }
+  return p
+}
+
+/**
+ * Wie recoveryDirForSource, aber nur feste Laufwerke erhalten einen eigenen Bereich. Bei Speicherkarten und
+ * USB-Sticks („Removable“) bleibt der Standardbereich – sonst würde die Karte beim Verschieben nicht frei und
+ * eine Formatierung in der Kamera würde die Sicherung zerstören. Unbekannter Typ → Standardbereich.
+ */
+export async function resolveRecoveryDir(
+  ctx: CoreContext,
+  project: Project,
+  srcPath: string,
+  driveType: (root: string) => Promise<string | null> = windowsDriveType,
+  platform: NodeJS.Platform = process.platform
+): Promise<string> {
+  const dir = recoveryDirForSource(ctx, project, srcPath, platform)
+  if (dir === project.recoveryDir) return dir
+  const t = await driveType(path.win32.parse(srcPath).root)
+  return t === 'Fixed' ? dir : project.recoveryDir
+}
+
 /** Ordner unter Windows verstecken (best effort). */
 export async function hideVolumeRecoveryDir(dir: string): Promise<void> {
   if (process.platform !== 'win32') return

@@ -94,6 +94,7 @@ export class AppService {
   private thumbBuffer = new Map<string, Set<number>>()
   private thumbTimer: NodeJS.Timeout | null = null
   interruptedJobs = 0
+  fileOpsMode: 'worker' | 'inline' = 'inline'
   reconcileNotes: string[] = []
 
   constructor(

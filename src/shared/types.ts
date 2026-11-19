@@ -381,6 +381,7 @@ export interface StartupInfo {
   dbPath: string
   interruptedJobs: number
   tools: { exiftool: boolean; ffmpeg: boolean; ffprobe: boolean; sharp: boolean }
+  fileOps: 'worker' | 'inline'
 }
 
 export interface ProjectBundle {

@@ -10,13 +10,14 @@ import fs from 'node:fs'
 import path from 'node:path'
 import type { JobItemInfo, JobItemKind, JobItemStatus, JobStatus, JobSummary, WorkMode } from '@shared/types'
 import { newId, oplog, type CoreContext } from './context'
+import { durable } from '../db/database'
 import { AbortError } from './fileops'
 import { SimulatedCrash } from './faults'
 import { commitNoOverwrite, exists, freeBytes, KeyedMutex, statOrNull, unlinkIfExists } from './fsx'
 import { numberedName, pathKey, TMP_PREFIX, TMP_SUFFIX } from './paths'
 import { SPACE_MARGIN, type PlanSnapshot } from './planner'
 import { getProject } from './projects'
-import { hideVolumeRecoveryDir, recoveryDirForSource } from './recovery'
+import { hideVolumeRecoveryDir, resolveRecoveryDir } from './recovery'
 import { getSettings } from './settings'
 
 export class TransferError extends Error {
@@ -661,12 +662,13 @@ export class TransferEngine {
     const ac = new AbortController()
     this.inflight.set(it.id, { ac, mediaId: it.media_id, jobId: it.job_id })
     if (it.media_id != null) this.busyMedia.add(it.media_id)
-    this.ctx.db.prepare('UPDATE job_items SET attempts = attempts + 1 WHERE id = ?').run(it.id)
     it = { ...it, attempts: it.attempts + 1 }
-    const job = this.job(it.job_id)
-    if (job.status === 'queued') {
-      this.ctx.db.prepare("UPDATE jobs SET status='running', started_at=COALESCE(started_at, ?), updated_at=? WHERE id=?").run(this.ctx.now(), this.ctx.now(), it.job_id)
-    }
+    this.ctx.db.transaction(() => {
+      this.ctx.db.prepare('UPDATE job_items SET attempts = attempts + 1 WHERE id = ?').run(it.id)
+      this.ctx.db
+        .prepare("UPDATE jobs SET status='running', started_at=COALESCE(started_at, ?), updated_at=? WHERE id=? AND status='queued'")
+        .run(this.ctx.now(), this.ctx.now(), it.job_id)
+    })()
     void this.execute(it, ac.signal)
       .catch((e) => {
         if (e instanceof SimulatedCrash) {
@@ -992,7 +994,7 @@ export class TransferEngine {
     const month = new Date(this.ctx.now()).toISOString().slice(0, 7)
     const sub = path.join(month, `${media.id}-${it.id.slice(0, 8)}`)
     // Bevorzugt Wiederherstellungsbereich auf dem Laufwerk der Quelle (schnelles Umbenennen); sonst Standardort
-    let recDir = path.join(recoveryDirForSource(this.ctx, project, src), sub)
+    let recDir = path.join(await resolveRecoveryDir(this.ctx, project, src), sub)
     try {
       await fs.promises.mkdir(recDir, { recursive: true })
       await hideVolumeRecoveryDir(recDir)
@@ -1010,7 +1012,8 @@ export class TransferEngine {
     const recDev = (await fs.promises.stat(recDir)).dev
     const sameVolume = st.dev === recDev
 
-    db.transaction(() => {
+    // Muss vor dem Verschieben der Quelle dauerhaft gespeichert sein (Abgleich nach Stromausfall)
+    durable(db, () => {
       db.prepare(
         `INSERT INTO recovery_items (id, project_id, media_id, file_name, original_path, recovery_path, size, sha256, status, job_item_id, moved_at, updated_at)
          VALUES (?,?,?,?,?,?,?,?,'staging',?,?,?)`
@@ -1022,7 +1025,7 @@ export class TransferEngine {
         error_code: null,
         error_message: null
       })
-    })()
+    })
 
     if (sameVolume) {
       // Gleicher Datenträger: atomare Umbenennung (Quelle existiert danach entweder alt ODER neu)
@@ -1064,7 +1067,7 @@ export class TransferEngine {
     // Quelle unverändert? Erst dann entfernen.
     const st = await statOrNull(src)
     if (!st || st.size !== it.src_size || Math.round(st.mtimeMs) !== it.src_mtime_ms) throw new TransferError('SOURCE_CHANGED', ERR_TEXT.SOURCE_CHANGED)
-    this.setItem(it.id, 'recovery_committed', 'source_removing', {})
+    durable(this.ctx.db, () => this.setItem(it.id, 'recovery_committed', 'source_removing', {}))
     try {
       await fs.promises.unlink(src)
     } catch (e) {
@@ -1132,8 +1135,8 @@ export class TransferEngine {
     const db = this.ctx.db
     const rec = db.prepare('SELECT * FROM recovery_items WHERE id = ?').get(it.recovery_item_id) as { id: string; recovery_path: string } | undefined
     const t = this.ctx.now()
-    this.setItem(it.id, this.item(it.id)!.status, 'source_removing', { final_path: finalPath })
-    db.transaction(() => {
+    durable(db, () => {
+      this.setItem(it.id, this.item(it.id)!.status, 'source_removing', { final_path: finalPath })
       if (rec) db.prepare("UPDATE recovery_items SET status='restored', restored_at=?, restored_to=?, updated_at=? WHERE id=?").run(t, finalPath, t, rec.id)
       if (it.media_id) {
         const st = fs.statSync(finalPath)
@@ -1145,7 +1148,7 @@ export class TransferEngine {
           it.media_id
         )
       }
-    })()
+    })
     // Wiederhergestellte Datei ist verifiziert -> Kopie im Wiederherstellungsbereich entfernen
     if (rec) {
       await unlinkIfExists(rec.recovery_path)
@@ -1249,8 +1252,11 @@ export class TransferEngine {
       vals.push(note)
     }
     vals.push(id)
-    this.ctx.db.prepare(`UPDATE job_items SET ${sets.join(', ')} WHERE id = ?`).run(...vals)
-    if (from !== to || note) this.event(id, from, to, note ?? null)
+    // Status und Protokoll in einer Transaktion (ein Flush statt zwei bei synchronous=FULL)
+    this.ctx.db.transaction(() => {
+      this.ctx.db.prepare(`UPDATE job_items SET ${sets.join(', ')} WHERE id = ?`).run(...vals)
+      if (from !== to || note) this.event(id, from, to, note ?? null)
+    })()
   }
 
   private event(itemId: string, from: JobItemStatus | null, to: JobItemStatus, note: string | null): void {

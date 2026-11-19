@@ -1,6 +1,9 @@
 import { Worker } from 'node:worker_threads'
+import fs from 'node:fs'
+import os from 'node:os'
+import path from 'node:path'
 import type { FileOps, HashResult } from './fileops'
-import { AbortError } from './fileops'
+import { AbortError, copyWithHashInline, hashFileInline } from './fileops'
 
 interface Pending {
   resolve: (r: HashResult) => void
@@ -15,6 +18,10 @@ export class WorkerFileOps implements FileOps {
   private load = new Map<Worker, number>()
   private pending = new Map<number, Pending>()
   private seq = 0
+  private dead = new Set<Worker>()
+  private respawns: number[] = []
+  /** true, wenn Worker wiederholt abstürzen: Vorgänge laufen dann im Main-Prozess weiter. */
+  broken = false
 
   constructor(private script: string, size: number) {
     for (let i = 0; i < size; i++) this.spawn()
@@ -46,6 +53,8 @@ export class WorkerFileOps implements FileOps {
   }
 
   private failWorker(w: Worker, err: Error): void {
+    if (this.dead.has(w)) return // 'error' und 'exit' kommen beide – nur einmal behandeln
+    this.dead.add(w)
     for (const [id, p] of this.pending) {
       if (p.worker === w) {
         this.pending.delete(id)
@@ -54,7 +63,33 @@ export class WorkerFileOps implements FileOps {
     }
     this.workers = this.workers.filter((x) => x !== w)
     this.load.delete(w)
-    this.spawn()
+    // Neustart begrenzen (keine Endlosschleife, falls das Worker-Skript nicht ladbar ist)
+    const now = Date.now()
+    this.respawns = this.respawns.filter((t) => now - t < 60_000)
+    if (this.respawns.length >= 5) {
+      this.broken = true
+      return
+    }
+    this.respawns.push(now)
+    try {
+      this.spawn()
+    } catch {
+      this.broken = true
+    }
+  }
+
+  /** Prüft beim Start, ob die Worker funktionieren (Hash einer kleinen Testdatei). */
+  async selfTest(timeoutMs = 8000): Promise<boolean> {
+    const f = path.join(os.tmpdir(), `ppm-selftest-${process.pid}.bin`)
+    fs.writeFileSync(f, 'photopack')
+    try {
+      const r = await Promise.race([this.hashFile(f), new Promise<null>((res) => setTimeout(() => res(null), timeoutMs))])
+      return !!r && r.size === 9 && /^[0-9a-f]{64}$/.test(r.sha256)
+    } catch {
+      return false
+    } finally {
+      fs.rmSync(f, { force: true })
+    }
   }
 
   private pick(): Worker {
@@ -65,6 +100,7 @@ export class WorkerFileOps implements FileOps {
 
   private run(op: 'hash' | 'copy', src: string, dst: string | undefined, signal?: AbortSignal, onProgress?: (n: number) => void): Promise<HashResult> {
     if (signal?.aborted) return Promise.reject(new AbortError())
+    if (this.broken || this.workers.length === 0) return op === 'hash' ? hashFileInline(src, signal) : copyWithHashInline(src, dst!, signal, onProgress)
     const id = ++this.seq
     const w = this.pick()
     this.load.set(w, (this.load.get(w) ?? 0) + 1)

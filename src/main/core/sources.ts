@@ -152,6 +152,28 @@ export function removeSource(ctx: CoreContext, sourceId: string): { removedMedia
 
 // ---------------- Indexierung ----------------
 
+/**
+ * Art eines Verzeichniseintrags. Unter Windows meldet readdir jeden Analysepunkt (Reparse Point) als Link –
+ * auch OneDrive-/Cloud-Platzhalter, die echte Dateien bzw. Ordner sind. Daher wird bei „Link“ per lstat
+ * nachgeprüft: Nur echte symbolische Links und Junctions (lesbares Linkziel) werden übersprungen.
+ */
+export async function entryType(ent: fs.Dirent, full: string, lstat: (p: string) => Promise<fs.Stats> = fs.promises.lstat): Promise<'file' | 'dir' | 'link' | 'other'> {
+  if (ent.isSymbolicLink()) {
+    try {
+      const st = await lstat(full)
+      if (st.isSymbolicLink()) return 'link'
+      if (st.isDirectory()) return 'dir'
+      if (st.isFile()) return 'file'
+      return 'other'
+    } catch {
+      return 'other'
+    }
+  }
+  if (ent.isDirectory()) return 'dir'
+  if (ent.isFile()) return 'file'
+  return 'other'
+}
+
 /** RAW+JPEG-Paare: gleicher Ordner, gleicher Basisname, genau ein RAW und ein JPEG/HEIC. */
 export function computePairs(ctx: CoreContext, sourceId: string): number {
   const rows = ctx.db
@@ -301,12 +323,14 @@ export async function scanSource(ctx: CoreContext, sourceId: string, signal?: Ab
     try {
       for await (const ent of handle) {
         const full = path.join(dir, ent.name)
-        if (ent.isSymbolicLink()) {
+        const type = await entryType(ent, full)
+        if (type === 'link') {
           // Symbolische Links und Junctions werden nicht verfolgt (Schleifen / doppelte Importe vermeiden)
           result.skippedLinks++
           continue
         }
-        if (ent.isDirectory()) {
+        if (type === 'other') continue
+        if (type === 'dir') {
           if (SKIP_DIR_NAMES.has(ent.name.toLowerCase()) || isExcluded(full)) {
             result.skippedDirs++
             continue
@@ -314,7 +338,6 @@ export async function scanSource(ctx: CoreContext, sourceId: string, signal?: Ab
           stack.push(full)
           continue
         }
-        if (!ent.isFile()) continue
         if (isOwnTempFile(ent.name)) continue
         const ext = extOf(ent.name)
         if (ext === 'xmp') {

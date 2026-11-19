@@ -97,14 +97,20 @@ export function closePresenter(): void {
 
 async function start(): Promise<void> {
   const dataDir = app.getPath('userData')
-  let fileOps
+  let fileOps: import('./core/fileops').FileOps = inlineFileOps
+  let fileOpsMode: 'worker' | 'inline' = 'inline'
   try {
-    fileOps = new WorkerFileOps(path.join(__dirname, 'file-worker.js'), 2)
+    const pool = new WorkerFileOps(path.join(__dirname, 'file-worker.js'), 2)
+    if (await pool.selfTest()) {
+      fileOps = pool
+      fileOpsMode = 'worker'
+    } else await pool.close()
   } catch {
     fileOps = inlineFileOps
   }
   try {
     svc = new AppService(dataDir, fileOps, send)
+    svc.fileOpsMode = fileOpsMode
     await svc.init()
   } catch (e) {
     dialog.showErrorBox('PhotoPack Manager', 'Die Datenbank konnte nicht geöffnet werden:\n' + (e as Error).message)

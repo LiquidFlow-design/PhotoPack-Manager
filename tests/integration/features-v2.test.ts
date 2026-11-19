@@ -8,7 +8,7 @@ import { applyAssignments, listAssignments, packageOrder, reorderPackage } from 
 import { exportProject, importProject } from '../../src/main/core/backup'
 import { setColorLabel, setRating } from '../../src/main/core/media-meta'
 import { getProject, updateProjectSettings } from '../../src/main/core/projects'
-import { recoveryDirForSource, releaseAllHeld } from '../../src/main/core/recovery'
+import { recoveryDirForSource, releaseAllHeld, resolveRecoveryDir } from '../../src/main/core/recovery'
 import { updateSettings } from '../../src/main/core/settings'
 import { dhashFromPixels, hamming, listSimilarGroups, scanSimilar } from '../../src/main/core/similar'
 import { exportPackageZip } from '../../src/main/core/zip-export'
@@ -222,6 +222,15 @@ describe('Wiederherstellungsbereich je Laufwerk und Projekt abschließen', () =>
     updateSettings(env.ctx, { recoveryPerVolume: false })
     expect(recoveryDirForSource(env.ctx, p, 'D:\\Fotos\\a.jpg', 'win32')).toBe(p.recoveryDir)
     expect(recoveryDirForSource(env.ctx, p, '/mnt/x/a.jpg', 'linux')).toBe(p.recoveryDir)
+  })
+
+  it('nur feste Laufwerke erhalten einen eigenen Bereich (keine SD-Karten/USB-Sticks)', async () => {
+    env = await makeEnv({})
+    const p = { ...getProject(env.ctx, env.projectId), recoveryDir: 'C:\\R\\P1', recoveryDirCustom: false, id: 'P1' }
+    const type = (t: string | null) => async () => t
+    expect(await resolveRecoveryDir(env.ctx, p, 'D:\\Fotos\\a.jpg', type('Fixed'), 'win32')).toBe('D:\\.photopack-recovery\\P1')
+    expect(await resolveRecoveryDir(env.ctx, p, 'E:\\DCIM\\a.jpg', type('Removable'), 'win32')).toBe(p.recoveryDir)
+    expect(await resolveRecoveryDir(env.ctx, p, 'E:\\DCIM\\a.jpg', type(null), 'win32')).toBe(p.recoveryDir)
   })
 
   it('„Projekt abschließen“ gibt alle gehaltenen Quellen frei', async () => {

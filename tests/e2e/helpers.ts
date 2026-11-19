@@ -12,8 +12,10 @@ export interface AppHandle {
 
 export async function launch(userData?: string): Promise<AppHandle> {
   const dir = userData ?? fs.mkdtempSync(path.join(os.tmpdir(), 'ppm-e2e-'))
+  // PPM_E2E_EXE: gepacktes Programm testen (asar, entpackte Binärdateien, Worker)
+  const exe = process.env.PPM_E2E_EXE
   const app = await electron.launch({
-    args: ['--no-sandbox', path.resolve(__dirname, '../..')],
+    ...(exe ? { executablePath: exe, args: ['--no-sandbox'] } : { args: ['--no-sandbox', path.resolve(__dirname, '../..')] }),
     env: { ...process.env, PPM_USER_DATA: dir, ELECTRON_RENDERER_URL: '' } as Record<string, string>
   })
   const page = await app.firstWindow()

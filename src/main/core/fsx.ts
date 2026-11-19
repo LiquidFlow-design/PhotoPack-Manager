@@ -60,18 +60,40 @@ export async function freeBytes(p: string): Promise<number | null> {
 export async function commitNoOverwrite(tmp: string, final: string): Promise<boolean> {
   try {
     await fs.promises.link(tmp, final)
-    await fs.promises.unlink(tmp)
-    return true
   } catch (e) {
     const code = (e as NodeJS.ErrnoException).code
     if (code === 'EEXIST') return false
-    if (code && ['EPERM', 'ENOTSUP', 'EXDEV', 'ENOSYS', 'EINVAL', 'EACCES', 'EOPNOTSUPP', 'UNKNOWN'].includes(code)) {
+    // Kein Hardlink möglich: FAT32/exFAT (Windows meldet EISDIR), manche Netzlaufwerke (ENOTSUP/EPERM) …
+    if (code && LINK_UNSUPPORTED.has(code)) {
       if (await exists(final)) return false
       await fs.promises.rename(tmp, final)
       return true
     }
     throw e
   }
+  // Hardlink steht – Ziel ist festgeschrieben. Zwischendatei entfernen; kurzzeitige Sperren
+  // (z. B. Virenscanner unter Windows) dürfen NICHT als „Name belegt“ gewertet werden.
+  await removeWithRetry(tmp)
+  return true
+}
+
+const LINK_UNSUPPORTED = new Set(['EPERM', 'ENOTSUP', 'EXDEV', 'ENOSYS', 'EINVAL', 'EACCES', 'EOPNOTSUPP', 'EISDIR', 'UNKNOWN'])
+
+/** Löschen mit kurzen Wiederholungen bei EBUSY/EPERM (Windows: Virenscanner, Indexdienst). Scheitert es endgültig,
+ * bleibt die eigene Zwischendatei liegen und wird beim nächsten Abgleich/Indexieren ignoriert bzw. entfernt. */
+export async function removeWithRetry(p: string, attempts = 6): Promise<boolean> {
+  for (let i = 0; i < attempts; i++) {
+    try {
+      await fs.promises.unlink(p)
+      return true
+    } catch (e) {
+      const code = (e as NodeJS.ErrnoException).code
+      if (code === 'ENOENT') return true
+      if (code !== 'EBUSY' && code !== 'EPERM' && code !== 'EACCES') return false
+      await new Promise((r) => setTimeout(r, 50 * 2 ** i))
+    }
+  }
+  return false
 }
 
 /** Einfache prozessinterne Sperre je Schlüssel (z. B. Zielordner beim Commit). */

@@ -122,3 +122,16 @@ describe('Duplikaterkennung', () => {
     expect(fs.readdirSync(env.srcDir).sort()).toEqual(['a.jpg', 'c.jpg', 'd.jpg', 'sub'])
   })
 })
+
+describe('Windows-Analysepunkte (OneDrive-Platzhalter)', () => {
+  it('als Link gemeldete Einträge werden per lstat eingeordnet', async () => {
+    const { entryType } = await import('../../src/main/core/sources')
+    const linkDirent = { isSymbolicLink: () => true, isDirectory: () => false, isFile: () => false } as unknown as import('node:fs').Dirent
+    const fake = (kind: 'file' | 'dir' | 'link') => async () =>
+      ({ isSymbolicLink: () => kind === 'link', isDirectory: () => kind === 'dir', isFile: () => kind === 'file' }) as unknown as import('node:fs').Stats
+    expect(await entryType(linkDirent, 'x', fake('file'))).toBe('file') // OneDrive-Datei
+    expect(await entryType(linkDirent, 'x', fake('dir'))).toBe('dir') // OneDrive-Ordner
+    expect(await entryType(linkDirent, 'x', fake('link'))).toBe('link') // echter Symlink/Junction
+    expect(await entryType(linkDirent, 'x', async () => Promise.reject(new Error('x')))).toBe('other')
+  })
+})

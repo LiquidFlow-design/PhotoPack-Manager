@@ -6,7 +6,7 @@ import { exists, freeBytes, nearestExisting, statOrNull } from './fsx'
 import { effectiveTargetDir } from './packages'
 import { isInside, nameKey, numberedName, pathKey, volumeRoot } from './paths'
 import { getProject } from './projects'
-import { recoveryDirForSource } from './recovery'
+import { resolveRecoveryDir } from './recovery'
 
 export interface PlannedCopy {
   mediaId: number
@@ -272,7 +272,7 @@ export async function buildPlan(
   }
   if (releases.length) {
     for (const r of releases) {
-      const recRoot = volumeRoot(recoveryDirForSource(ctx, project, r.srcPath))
+      const recRoot = volumeRoot(await resolveRecoveryDir(ctx, project, r.srcPath))
       if (volumeRoot(r.srcPath) !== recRoot) need.set(recRoot, (need.get(recRoot) ?? 0) + r.srcSize)
     }
   }

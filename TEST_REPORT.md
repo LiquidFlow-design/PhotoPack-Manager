@@ -1,6 +1,6 @@
 # Testbericht
 
-**Stand:** 18.11.2026 · Version 1.0.0-beta.1 + Version-2-Funktionen
+**Stand:** 19.11.2026 (nach Audit, siehe AUDIT.md) · Version 1.0.0-beta.1 + Version-2-Funktionen
 **Umgebung der Testläufe:** Linux x64 (Ubuntu 24.04, Container), Node.js 22.23, Electron 44.11,
 Chromium-Rendering unter Xvfb (Software-Rendering, keine GPU). **Nicht** auf einem echten Windows-System
 ausgeführt – siehe „Nicht geprüft“.
@@ -12,8 +12,10 @@ generierte Dateien in temporären Ordnern.
 
 | Suite | Befehl | Ergebnis |
 |---|---|---|
-| Unit + Integration (Vitest) | `npm test` | **101 / 101 bestanden** (10 Dateien) |
-| Electron-E2E (Playwright) | `npm run test:e2e` | **17 / 17 bestanden** (Kern 10, Version 2 6, UI-Leistung 1) |
+| Unit + Integration (Vitest) | `npm test` | **109 / 109 bestanden** (12 Dateien) |
+| Electron-E2E (Playwright) | `npm run test:e2e` | **19 / 19 bestanden** (Kern 10, Version 2 7, Barrierefreiheit 1, UI-Leistung 1) |
+| E2E gegen **gepacktes** Programm | `PPM_E2E_EXE=release/linux-unpacked/photopack-manager npx playwright test app features` | **16 / 16 bestanden** (asar, Worker, Decoder im Paketzustand) |
+| Barrierefreiheit (axe-core) | `npx playwright test a11y` | 22 Ansichten/Dialoge, hell + dunkel: **keine** schwerwiegenden/kritischen Verstöße |
 | Skalierung 12 000 Medien (Vitest) | `npm run test:perf` | **7 / 7 bestanden** |
 | Typprüfung | `npm run typecheck` | fehlerfrei (Main, Renderer, E2E) |
 | Gepackte App (Linux-Variante desselben asar-Layouts) | `node scripts/smoke.mjs … release/linux-unpacked/photopack-manager` | Start, Indexierung, Vorschauen (Bild/Video), Decoder-Status ok |
@@ -70,6 +72,11 @@ Idempotenz, Pause/Fortsetzen/Abbruch, Fehler nach atomarem Verschieben, Rückfal
 (manipulierte Kopie wird abgelehnt).
 
 ## 3. Leistungsmessungen (12 000 synthetische Medien)
+
+**Nachmessung nach dem Audit (19.11.):** Export kleiner Dateien 238 Dateien/s, große Dateien 273 MB/s,
+Indexierung 0,91 s, Duplikatprüfung 3,3 s. Die Umgebung lief in diesem Durchgang insgesamt ca. 25–40 % langsamer
+(auch unveränderte Teile wie Indexierung und Hashing); ein Teil des Rückgangs beim Export stammt aus der neuen
+Stromausfall-Absicherung (A5). Die Tabellen unten sind die Werte vom 18.11.
 
 Container ohne GPU, lokale SSD, Dateien sehr klein (Metadaten-/Verwaltungsaufwand dominiert). Werte sind
 Einzelmessungen; auf Windows mit NTFS, Virenscanner und echten Mediengrößen sind andere Werte zu erwarten.

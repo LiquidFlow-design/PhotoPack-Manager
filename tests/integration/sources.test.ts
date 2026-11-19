@@ -135,3 +135,16 @@ describe('Windows-Analysepunkte (OneDrive-Platzhalter)', () => {
     expect(await entryType(linkDirent, 'x', async () => Promise.reject(new Error('x')))).toBe('other')
   })
 })
+
+describe('Re-Import-Schutz über Projekte hinweg', () => {
+  it('Exportordner eines anderen Projekts in der Quelle wird ausgeschlossen', async () => {
+    const { createProject, updateProjectSettings } = await import('../../src/main/core/projects')
+    env = await makeEnv({ 'a.jpg': 'x' })
+    const other = createProject(env.ctx, 'Anderes Projekt')
+    const foreignOut = path.join(env.srcDir, 'export-anderes-projekt')
+    writeFile(path.join(foreignOut, 'Anna', 'b.jpg'), 'y')
+    updateProjectSettings(env.ctx, other.id, { outputDir: foreignOut })
+    await scanSource(env.ctx, env.sourceId)
+    expect(count(env)).toBe(1)
+  })
+})

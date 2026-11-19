@@ -35,6 +35,11 @@ Code-Signatur empfohlen (siehe „Signierung“).
 Programmdaten (Datenbank, Vorschau-Cache, Wiederherstellungsbereich) liegen unter
 `%APPDATA%\PhotoPack Manager\`. Die Mediendateien selbst bleiben im Dateisystem.
 
+**OneDrive:** Ordner in OneDrive werden unterstützt. Dateien mit Status „Nur online verfügbar“ werden beim
+Erzeugen der Vorschau bzw. beim Export heruntergeladen.
+
+Prüfbericht und Windows-Abnahmeliste: [AUDIT.md](AUDIT.md).
+
 ## Nutzung in Kürze
 
 1. **Projekt anlegen** (Kopfzeile → Projektname) und **Quellordner hinzufügen** (linke Seitenleiste).
@@ -86,6 +91,7 @@ npm test                                   # Unit- und Integrationstests (Vitest
 npm run test:perf                          # Skalierung mit 12 000 synthetischen Medien
 npm run test:e2e                           # Electron-E2E (Playwright), baut vorher
 npx playwright test perf --trace off       # UI-Reaktionsfähigkeit mit 12 000 Medien
+npx playwright test a11y --trace off       # Barrierefreiheit (axe-core)
 ```
 
 Unter Linux ohne Bildschirm: `xvfb-run -a npm run test:e2e`; als root zusätzlich ist `--no-sandbox`

@@ -88,3 +88,14 @@ Jeder Punkt ist klein und kann auf Wunsch entfernt werden.
 Erklärtexte wurden entfernt bzw. gekürzt: rechte Seitenleiste (Zuordnungs- und Ausgabehinweise), Hinweise beim
 Umschalten auf Verschieben/Sofort, Infokasten der Exportvorschau, Duplikat- und Quellendialog, mehrere
 Einstellungsbeschreibungen. Warnungen und Fehler bleiben sichtbar.
+
+## G. Entscheidungen aus dem Audit (19.11.2026)
+
+| # | Entscheidung | Begründung |
+|---|---|---|
+| G1 | Datenbank `synchronous=NORMAL`, aber Zustände **vor nicht umkehrbaren Dateischritten** mit `durable()` (FULL) | Volle Synchronisation jeder Transaktion halbierte den Durchsatz kleiner Dateien; alle übrigen Schritte sind nach Stromausfall durch den Abgleich wiederholbar (identische Ziele werden erkannt). |
+| G2 | Recovery je Laufwerk nur für Laufwerkstyp „Fixed“ | Speicherkarten müssen beim Verschieben frei werden; Sicherung darf nicht auf dem Medium liegen, das danach formatiert wird. |
+| G3 | Re-Import-Schutz projektübergreifend | Auch Exporte anderer Projekte sind keine neuen Quellmedien. |
+| G4 | Electron-Fuses im Paket (RunAsNode, NODE_OPTIONS, Inspect aus; nur asar mit Integritätsprüfung) | Schutz gegen Missbrauch der signierten EXE. Folge: Das *gepackte* Programm lässt sich nicht mehr per Playwright fernsteuern; E2E gegen das Paket erfolgt mit einem Build ohne Fuses (`-c.electronFuses=null`). |
+| G5 | Einklapp-Reihenfolge: Quellenleiste vor Paketleiste | Pakete werden beim Sichten ständig gebraucht. |
+| G6 | Fensterlage wird gespeichert | Windows-übliches Verhalten. |

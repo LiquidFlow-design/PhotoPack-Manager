@@ -52,11 +52,14 @@ export function getSource(ctx: CoreContext, id: string): Source {
  * globaler Ausgabeordner, individuelle Paketziele, Wiederherstellungsbereich, App-Datenordner.
  */
 export async function protectedDirs(ctx: CoreContext, projectId: string): Promise<string[]> {
-  const p = getProject(ctx, projectId)
-  const dirs = [ctx.dataDir, p.recoveryDir]
-  if (p.outputDir) dirs.push(p.outputDir)
-  const targets = ctx.db.prepare('SELECT target_dir FROM packages WHERE project_id = ? AND target_dir IS NOT NULL').all(projectId) as Array<{ target_dir: string }>
-  for (const t of targets) dirs.push(t.target_dir)
+  getProject(ctx, projectId)
+  // Ausgabe-, Paket- und Wiederherstellungsordner ALLER Projekte (auch fremde Exporte nicht re-importieren)
+  const dirs = [ctx.dataDir]
+  for (const r of ctx.db.prepare('SELECT id, output_dir, recovery_dir FROM projects').all() as Array<{ id: string; output_dir: string | null; recovery_dir: string | null }>) {
+    dirs.push(getProject(ctx, r.id).recoveryDir)
+    if (r.output_dir) dirs.push(r.output_dir)
+  }
+  for (const t of ctx.db.prepare('SELECT target_dir FROM packages WHERE target_dir IS NOT NULL').all() as Array<{ target_dir: string }>) dirs.push(t.target_dir)
   const out: string[] = []
   for (const d of dirs) {
     out.push(path.resolve(d))

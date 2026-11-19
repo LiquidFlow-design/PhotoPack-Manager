@@ -1,4 +1,6 @@
 # Release: Tag „v*“ → Tests (Windows + Linux) → Windows-Build (Installer, portable EXE, ZIP) → GitHub-Release.
+# Alternativ manuell starten (Actions → Release → „Run workflow“ auf main): Der Tag wird dann beim Anlegen des
+# Releases auf genau dem getesteten Commit erzeugt; ein bereits vorhandener Tag muss auf diesen Commit zeigen.
 # Builds sind unsigniert, solange keine Zertifikats-Secrets (CSC_LINK / CSC_KEY_PASSWORD) hinterlegt sind.
 name: Release
 
@@ -8,7 +10,7 @@ on:
   workflow_dispatch:
     inputs:
       tag:
-        description: 'Bestehender Tag (z. B. v1.0.0-beta.1)'
+        description: 'Tag (z. B. v1.0.0-beta.1) – wird auf dem gewählten Branch-Stand angelegt, falls nicht vorhanden'
         required: true
 
 permissions:
@@ -28,9 +30,26 @@ jobs:
     env:
       TAG: ${{ github.event.inputs.tag || github.ref_name }}
     steps:
+      # Gebaut wird immer der Commit, den auch der Test-Job geprüft hat (github.sha).
+      - name: Tag prüfen
+        shell: pwsh
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          if ($env:TAG -notmatch '^v\d+\.\d+\.\d+(-[0-9A-Za-z.]+)?$') { throw "Ungültiger Tag: $env:TAG" }
+          $sha = gh api "repos/$env:GITHUB_REPOSITORY/commits/$env:TAG" --jq .sha 2>$null
+          if ($LASTEXITCODE -eq 0 -and "$sha" -match '^[0-9a-f]{40}$') {
+            if ($sha -ne $env:GITHUB_SHA) { throw "Tag $env:TAG zeigt auf $sha, getestet wurde $env:GITHUB_SHA" }
+            "TAG_EXISTS=true" >> $env:GITHUB_ENV
+          } else {
+            if ($env:GITHUB_EVENT_NAME -ne 'workflow_dispatch') { throw "Tag $env:TAG nicht gefunden" }
+            "TAG_EXISTS=false" >> $env:GITHUB_ENV
+            "Tag $env:TAG wird beim Anlegen des Releases auf $env:GITHUB_SHA erzeugt."
+          }
+          $global:LASTEXITCODE = 0
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
-          ref: ${{ env.TAG }}
+          ref: ${{ github.sha }}
       - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
         with:
           node-version-file: .nvmrc
@@ -77,4 +96,7 @@ jobs:
           if (-not (Test-Path $notes)) { $notes = "CHANGELOG.md" }
           $pre = if ($env:VERSION -match '-') { '--prerelease' } else { '' }
           $assets = (Get-ChildItem release -File | Where-Object { $_.Extension -in '.exe', '.zip' -or $_.Name -in 'SHA256SUMS.txt', 'ffmpeg-MANIFEST.json' }).FullName
-          gh release create $env:TAG $assets --title "PhotoPack Manager $env:VERSION" --notes-file $notes $pre --verify-tag
+          $tagArgs = if ($env:TAG_EXISTS -eq 'true') { @('--verify-tag') } else { @('--target', $env:GITHUB_SHA) }
+          $preArgs = if ($pre) { @($pre) } else { @() }
+          gh release create $env:TAG @assets --title "PhotoPack Manager $env:VERSION" --notes-file $notes @preArgs @tagArgs
+          if ($LASTEXITCODE -ne 0) { throw "gh release create fehlgeschlagen ($LASTEXITCODE)" }

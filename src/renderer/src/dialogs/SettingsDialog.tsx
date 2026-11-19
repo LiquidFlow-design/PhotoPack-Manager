@@ -1,5 +1,5 @@
-import { FolderCog } from 'lucide-react'
-import type { AppSettings } from '@shared/types'
+import { Download, FolderCog, RefreshCw, RotateCcw } from 'lucide-react'
+import type { AppSettings, UpdateStatus } from '@shared/types'
 import { api } from '../lib/api'
 import { useStore } from '../state/store'
 import { Modal } from './Modal'
@@ -9,6 +9,7 @@ export function SettingsDialog() {
   const settings = useStore((s) => s.settings)!
   const project = useStore((s) => s.project)
   const startup = useStore((s) => s.startup)
+  const update = useStore((s) => s.update)
   const s = useStore.getState()
   const up = (patch: Partial<AppSettings>) => void s.updateSettings(patch).catch((e) => s.toast('error', (e as Error).message))
 
@@ -190,7 +191,58 @@ export function SettingsDialog() {
       </div>
 
       <div className="h-section" style={{ marginTop: 16 }}>
+        Updates
+      </div>
+      <div className="setting-row">
+        <div style={{ minWidth: 0 }}>
+          <div>Version {startup?.version}</div>
+          <div className="desc" role="status" aria-live="polite">
+            {updateText(update)}
+          </div>
+        </div>
+        <div className="row">
+          {update?.state === 'ready' ? (
+            <button className="btn sm primary" onClick={() => void s.installUpdate()}>
+              <RotateCcw size={13} /> Neu starten und installieren
+            </button>
+          ) : update?.state === 'available' && update.install === 'manual' ? (
+            <button className="btn sm primary" onClick={() => void api.app.openReleasePage()}>
+              <Download size={13} /> Herunterladen
+            </button>
+          ) : null}
+          <button
+            className="btn sm"
+            disabled={!update || update.state === 'disabled' || update.state === 'checking' || update.state === 'downloading' || update.state === 'ready'}
+            onClick={() => void api.app.checkForUpdates().catch((e) => s.toast('error', (e as Error).message))}
+          >
+            <RefreshCw size={13} /> Nach Updates suchen
+          </button>
+        </div>
+      </div>
+      <div className="setting-row">
+        <div>
+          <div>Beim Start nach Updates suchen</div>
+          <div className="desc">Fragt einmal pro Start bei GitHub nach einer neuen Version. Sonst arbeitet das Programm offline.</div>
+        </div>
+        <input type="checkbox" aria-label="Beim Start nach Updates suchen" checked={settings.updateCheck} onChange={(e) => up({ updateCheck: e.target.checked })} />
+      </div>
+
+      <div className="h-section" style={{ marginTop: 16 }}>
         System
+      </div>
+      <div className="setting-row">
+        <div>
+          <div>Grafikbeschleunigung</div>
+          <div className="desc">Bei Darstellungsfehlern (z. B. doppelter Mauszeiger) ausschalten. Wirkt nach einem Neustart.</div>
+        </div>
+        <div className="row">
+          {startup && settings.hardwareAcceleration !== startup.gpu && (
+            <button className="btn sm" onClick={() => void api.app.relaunch().catch((e) => s.toast('warn', (e as Error).message))}>
+              <RotateCcw size={13} /> Neu starten
+            </button>
+          )}
+          <input type="checkbox" aria-label="Grafikbeschleunigung" checked={settings.hardwareAcceleration} onChange={(e) => up({ hardwareAcceleration: e.target.checked })} />
+        </div>
       </div>
       <div className="setting-row">
         <div>
@@ -222,4 +274,27 @@ export function SettingsDialog() {
       </div>
     </Modal>
   )
+}
+
+function updateText(u: UpdateStatus | null): string {
+  if (!u) return ''
+  const when = u.checkedAt ? ` (geprüft ${new Date(u.checkedAt).toLocaleTimeString('de-DE', { hour: '2-digit', minute: '2-digit' })})` : ''
+  switch (u.state) {
+    case 'disabled':
+      return 'Updates gibt es nur in der installierten Windows-Version.'
+    case 'idle':
+      return u.install === 'auto' ? 'Updates werden geladen und beim Beenden installiert.' : 'Neue Versionen werden gemeldet und auf GitHub heruntergeladen.'
+    case 'checking':
+      return 'Suche nach Updates …'
+    case 'none':
+      return `Auf dem neuesten Stand${when}.`
+    case 'available':
+      return `Version ${u.version ?? ''} ist verfügbar${u.install === 'manual' ? ' – bitte herunterladen und die bisherige Datei ersetzen' : ''}.`
+    case 'downloading':
+      return `Version ${u.version ?? ''} wird geladen${u.percent != null ? ` … ${Math.round(u.percent)} %` : ' …'}`
+    case 'ready':
+      return `Version ${u.version ?? ''} ist bereit und wird beim Beenden installiert.`
+    case 'error':
+      return `Update-Prüfung fehlgeschlagen: ${u.error ?? ''}`
+  }
 }

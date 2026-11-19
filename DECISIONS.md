@@ -115,3 +115,17 @@ Einstellungsbeschreibungen. Warnungen und Fehler bleiben sichtbar.
 | H9 | Benachrichtigungen nur für Sammelexporte/Wiederherstellungen und bei Fehlern, nur wenn das Fenster nicht im Vordergrund ist; Taskleiste: Fortschritt aller offenen Aufträge, gelb = pausiert, rot = Fehler | Sofortmodus würde sonst je Zuordnung melden. |
 | H10 | Portabler Modus: Daten in `PhotoPack-Daten` neben der EXE (portable EXE automatisch, ZIP-Version wenn der Ordner existiert); schreibgeschützt → `%APPDATA%` mit Hinweis | |
 | H11 | Nummernpräfix (`001_`) als Projekteinstellung, gilt für Sammel- und Sofortexport; Position = Rang im Paket über alle Hauptmedien, Sidecars übernehmen den Präfix | Stabil, auch wenn nur ein Teil exportiert wird. Bereits exportierte Dateien werden nicht umbenannt. |
+
+## I. Updates und Grafik (19.11.2026, Wunsch: „Update über GitHub“)
+
+| # | Entscheidung | Begründung / Einschränkung |
+|---|---|---|
+| I1 | **electron-updater** mit GitHub-Releases (`LiquidFlow-design/PhotoPack-Manager`); der Release-Workflow lädt `latest.yml` und `*.blockmap` mit hoch und prüft, dass `latest.yml` auf den Installer zeigt | Standardweg für electron-builder-Installer; differenzielle Downloads über die Blockmap. |
+| I2 | **Suche beim Start** (8 s nach dem Start, einmal pro Sitzung), abschaltbar; zusätzlich „Nach Updates suchen“ | Freigegeben. Ohne Suche bleibt das Programm vollständig offline. Fehler der automatischen Suche (z. B. offline) werden nur in den Einstellungen angezeigt, nicht als Meldung. |
+| I3 | **Installer-Version:** Hintergrund-Download, Installation beim Beenden oder sofort per „Jetzt neu starten“ – Sofort-Neustart nur ohne laufende Übertragungen | Freigegeben. Datensicherheit vor Bequemlichkeit; beim normalen Beenden werden Aufträge wie bisher sicher pausiert. |
+| I4 | **Portable EXE / ZIP:** nur Hinweis mit Link zur Release-Seite | Diese Varianten können sich nicht selbst ersetzen; der Installer würde eine zweite, installierte Kopie anlegen. Erkennung: `PORTABLE_EXECUTABLE_DIR` bzw. fehlendes Deinstallationsprogramm neben der EXE. |
+| I5 | Vorabversionen (`-beta`) erhalten auch Vorabversionen als Update, stabile Versionen nur stabile; kein Downgrade | Verhalten von electron-updater (`allowPrerelease` aus der eigenen Version). |
+| I6 | Unsignierte Updates: Prüfung über SHA-512 aus `latest.yml`, keine Signaturprüfung | Erst mit Code-Signatur möglich (dann `publisherName` setzen). SmartScreen kann beim Update-Installer erneut warnen. |
+| I7 | Die Release-Seite öffnet der Main-Prozess mit fester GitHub-Adresse; der Renderer kann keine URLs übergeben | Sicherheitsmodell unverändert (keine Navigation, keine freien Adressen). |
+| I8 | **Grafikbeschleunigung abschaltbar** (Einstellung + `launch.json` im Datenordner, da vor dem Start von Chromium nötig) | Gemeldet: doppelter Mauszeiger über der Paketleiste, nur unter Windows, nicht nachstellbar. Die App zeichnet keinen eigenen Zeiger; Ursache sehr wahrscheinlich Grafiktreiber/Overlay-Ebenen. Abschalten der GPU-Beschleunigung ist die übliche Abhilfe – Wirkung noch zu bestätigen. |
+

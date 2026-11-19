@@ -23,7 +23,8 @@ import type {
   SortState,
   Source,
   StartupInfo,
-  TaskProgress
+  TaskProgress,
+  UpdateStatus
 } from '@shared/types'
 import { api } from '../lib/api'
 
@@ -50,6 +51,7 @@ export interface Toast {
 interface State {
   ready: boolean
   startup: StartupInfo | null
+  update: UpdateStatus | null
   settings: AppSettings | null
   projects: ProjectSummary[]
   project: Project | null
@@ -116,7 +118,8 @@ interface Actions {
   undo(): Promise<void>
   updateProject(patch: Partial<Pick<Project, 'workMode' | 'operation' | 'conflictPolicy'>>): Promise<void>
   updateSettings(patch: Partial<AppSettings>): Promise<void>
-  toast(level: Toast['level'], text: string, action?: Toast['action']): void
+  toast(level: Toast['level'], text: string, action?: Toast['action'], ms?: number): void
+  installUpdate(): Promise<void>
   redo(): Promise<void>
   openPackageView(id: string): Promise<void>
   closePackageView(): void
@@ -204,6 +207,7 @@ export const useStore = create<State & Actions>((set, get) => {
   return {
     ready: false,
     startup: null,
+    update: null,
     settings: null,
     projects: [],
     project: null,
@@ -243,8 +247,13 @@ export const useStore = create<State & Actions>((set, get) => {
     busy: false,
 
     async init() {
-      const [startup, settings, projects] = await Promise.all([api.app.startup(), api.app.getSettings(), api.projects.list()])
-      set({ startup, settings, projects })
+      const [startup, settings, projects, update] = await Promise.all([
+        api.app.startup(),
+        api.app.getSettings(),
+        api.projects.list(),
+        api.app.updateStatus().catch(() => null)
+      ])
+      set({ startup, settings, projects, update })
       const last = settings.lastProjectId && projects.find((p) => p.id === settings.lastProjectId)
       if (last) await get().openProject(last.id)
       else if (projects.length === 0) set({ dialog: null })
@@ -636,10 +645,18 @@ export const useStore = create<State & Actions>((set, get) => {
       }
     },
 
-    toast(level, text, action) {
+    toast(level, text, action, ms) {
       const id = ++toastSeq
       set({ toasts: [...get().toasts.slice(-4), { id, level, text, action }] })
-      setTimeout(() => get().dismissToast(id), level === 'error' ? 9000 : level === 'warn' ? 7000 : 4000)
+      setTimeout(() => get().dismissToast(id), ms ?? (level === 'error' ? 9000 : level === 'warn' ? 7000 : 4000))
+    },
+    async installUpdate() {
+      try {
+        const r = await api.app.installUpdate()
+        if (!r.ok && r.message) get().toast('warn', r.message)
+      } catch (e) {
+        get().toast('error', (e as Error).message)
+      }
     },
     dismissToast(id) {
       set({ toasts: get().toasts.filter((t) => t.id !== id) })
@@ -665,6 +682,19 @@ export const useStore = create<State & Actions>((set, get) => {
         return
       }
       if (e.type === 'presenter-show') return
+      if (e.type === 'update-status') {
+        const prev = s.update
+        const u = e.status
+        set({ update: u })
+        const changed = prev?.state !== u.state
+        if (u.state === 'ready' && changed)
+          get().toast('success', `Version ${u.version ?? ''} ist bereit und wird beim Beenden installiert.`, { label: 'Jetzt neu starten', run: () => void get().installUpdate() }, 20000)
+        else if (u.state === 'available' && u.install === 'manual' && (changed || e.manual))
+          get().toast('info', `Version ${u.version ?? ''} ist verfügbar.`, { label: 'Herunterladen', run: () => void api.app.openReleasePage() }, 20000)
+        else if (u.state === 'none' && e.manual) get().toast('info', 'PhotoPack Manager ist auf dem neuesten Stand.')
+        else if (u.state === 'error' && e.manual) get().toast('error', `Update-Prüfung fehlgeschlagen: ${u.error ?? ''}`)
+        return
+      }
       if (e.type === 'theme-changed') {
         set({ darkSystem: e.dark })
         return

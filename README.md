@@ -36,6 +36,7 @@ Screenshots: [`docs/screenshots/`](docs/screenshots/).
 | `PhotoPack-Manager-<version>-portable.exe` | Portable Version, ohne Installation startbar |
 | `PhotoPack-Manager-<version>-win-x64.zip` | Entpacken und `PhotoPack Manager.exe` starten |
 | `SHA256SUMS.txt` | Prüfsummen |
+| `latest.yml`, `*.blockmap` | Update-Informationen für die App |
 
 **SmartScreen:** Unsignierte Builds lösen beim ersten Start die Warnung „Der Computer wurde durch Windows
 geschützt“ aus („Weitere Informationen“ → „Trotzdem ausführen“). Für die Verteilung an Dritte wird eine
@@ -53,6 +54,14 @@ Wiederherstellungsbereich; die Exportvorschau weist darauf hin.
 
 **Portabler Modus:** Die portable EXE speichert ihre Daten im Ordner `PhotoPack-Daten` neben der EXE. Bei der
 ZIP-Version genügt es, diesen Ordner anzulegen. Ist der Speicherort schreibgeschützt, wird `%APPDATA%` verwendet.
+
+**Updates:** Die Installer-Version sucht beim Start auf GitHub nach einer neuen Version, lädt sie im Hintergrund und
+installiert sie beim Beenden (Einstellungen → Updates: „Nach Updates suchen“, „Jetzt neu starten“, Suche beim Start
+abschaltbar). Portable EXE und ZIP melden neue Versionen mit Link zum Download. Laufende Übertragungen werden für
+ein Update nie unterbrochen. Ohne Update-Suche arbeitet das Programm vollständig offline.
+
+**Darstellungsfehler** (z. B. doppelter Mauszeiger): Einstellungen → System → Grafikbeschleunigung ausschalten und
+neu starten.
 
 Prüfbericht und Windows-Abnahmeliste: [AUDIT.md](AUDIT.md).
 

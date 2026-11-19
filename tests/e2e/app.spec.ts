@@ -210,6 +210,25 @@ test.describe.serial('PhotoPack Manager – Kern-Workflows', () => {
     await page.getByRole('radio', { name: 'Kopieren' }).click()
   })
 
+  test('Einstellungen: Updates (Entwicklungsversion) und Grafikbeschleunigung', async () => {
+    const { page } = h
+    await page.getByRole('button', { name: /^Einstellungen$/ }).click()
+    const dlg = page.getByRole('dialog', { name: 'Einstellungen' })
+    await expect(dlg.getByText('Updates gibt es nur in der installierten Windows-Version.')).toBeVisible()
+    await expect(dlg.getByRole('button', { name: 'Nach Updates suchen' })).toBeDisabled()
+    await expect(dlg.getByRole('checkbox', { name: 'Beim Start nach Updates suchen' })).toBeChecked()
+    const gpu = dlg.getByRole('checkbox', { name: 'Grafikbeschleunigung' })
+    const flags = () => JSON.parse(fs.readFileSync(path.join(userData, 'launch.json'), 'utf8')) as { hardwareAcceleration: boolean }
+    await gpu.uncheck()
+    await expect(dlg.getByRole('button', { name: 'Neu starten' })).toBeVisible()
+    await expect.poll(() => flags().hardwareAcceleration).toBe(false)
+    await gpu.check()
+    await expect(dlg.getByRole('button', { name: 'Neu starten' })).toHaveCount(0)
+    await expect.poll(() => flags().hardwareAcceleration).toBe(true)
+    await page.keyboard.press('Escape')
+    await expect(dlg).toHaveCount(0)
+  })
+
   test('Theme umschalten und Persistenz nach Neustart', async () => {
     const { page } = h
     await page.getByRole('button', { name: /^Farbschema/ }).click() // system -> hell

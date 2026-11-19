@@ -1,0 +1,63 @@
+{
+  "name": "photopack-manager",
+  "productName": "PhotoPack Manager",
+  "version": "1.0.0-beta.1",
+  "description": "Lokale Desktop-Anwendung zum sicheren Verteilen großer Foto-, RAW- und Videosammlungen auf Pakete.",
+  "main": "out/main/index.js",
+  "author": "PhotoPack Manager",
+  "license": "UNLICENSED",
+  "private": true,
+  "type": "commonjs",
+  "scripts": {
+    "dev": "electron-vite dev",
+    "build": "electron-vite build",
+    "start": "electron-vite preview",
+    "typecheck": "tsc --noEmit -p tsconfig.node.json && tsc --noEmit -p tsconfig.web.json && tsc --noEmit -p tsconfig.e2e.json",
+    "test": "vitest run",
+    "test:watch": "vitest",
+    "test:perf": "vitest run --config vitest.perf.config.mts",
+    "test:e2e": "npm run build && playwright test --trace off",
+    "dist:win": "npm run build && node scripts/fetch-ffmpeg-lgpl.mjs win32-x64 && electron-builder --win nsis portable --x64",
+    "dist:dir": "npm run build && electron-builder --dir",
+    "fetch:ffmpeg": "node scripts/fetch-ffmpeg-lgpl.mjs"
+  },
+  "dependencies": {
+    "better-sqlite3": "^13.2.0",
+    "exiftool-vendored": "^39.4.0",
+    "sharp": "^0.35.5",
+    "yazl": "^3.3.1",
+    "zod": "^4.6.7"
+  },
+  "devDependencies": {
+    "@axe-core/playwright": "^4.14.0",
+    "@playwright/test": "^1.65.1",
+    "@tanstack/react-virtual": "^3.14.26",
+    "@types/better-sqlite3": "^9.6.0",
+    "@types/node": "^26.6.6",
+    "@types/react": "^19.3.0",
+    "@types/react-dom": "^19.3.0",
+    "@types/yazl": "^3.3.1",
+    "@vitejs/plugin-react": "^6.3.0",
+    "electron": "^45.4.1",
+    "electron-builder": "^26.18.0",
+    "electron-vite": "^6.0.0",
+    "ffmpeg-static": "^5.3.0",
+    "ffprobe-static": "^3.1.0",
+    "lucide-react": "^1.76.0",
+    "react": "^19.3.1",
+    "react-dom": "^19.3.1",
+    "typescript": "^7.0.2",
+    "vite": "^8.3.8",
+    "vitest": "^5.1.1",
+    "zustand": "^5.1.0"
+  },
+  "allowScripts": {
+    "ffmpeg-static@5.3.0": true,
+    "better-sqlite3": false,
+    "electron-winstaller": false
+  },
+  "engines": {
+    "node": ">=26.13.1",
+    "npm": ">=11.20.0"
+  }
+}

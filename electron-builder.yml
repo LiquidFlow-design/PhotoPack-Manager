@@ -1,0 +1,74 @@
+appId: de.photopack.manager
+productName: PhotoPack Manager
+copyright: PhotoPack Manager
+directories:
+  output: release
+  buildResources: resources
+files:
+  - out/**
+  - package.json
+  - '!**/*.map'
+asar: true
+asarUnpack:
+  - '**/node_modules/sharp/**'
+  - '**/node_modules/@img/**'
+  - '**/node_modules/exiftool-vendored.exe/**'
+  - '**/node_modules/exiftool-vendored.pl/**'
+  - '**/node_modules/better-sqlite3/**'
+# Härtung: EXE nicht als Node-Laufzeit missbrauchbar, App nur aus dem (integritätsgeprüften) asar-Archiv
+electronFuses:
+  runAsNode: false
+  enableCookieEncryption: true
+  enableNodeOptionsEnvironmentVariable: false
+  enableNodeCliInspectArguments: false
+  enableEmbeddedAsarIntegrityValidation: true
+  onlyLoadAppFromAsar: true
+# Native Module liegen als N-API-Prebuilds vor -> kein Neukompilieren nötig
+npmRebuild: false
+nodeGypRebuild: false
+win:
+  # Nur Windows-x64-Binärdateien ausliefern
+  files:
+    - '!**/node_modules/exiftool-vendored.pl/**'
+    - '!**/node_modules/@img/sharp-linux*/**'
+    - '!**/node_modules/@img/sharp-libvips-linux*/**'
+    - '!**/node_modules/@img/sharp-wasm32/**'
+    - '!**/node_modules/better-sqlite3/prebuilds/{darwin,linux,linuxmusl}-*.node'
+    - '!**/node_modules/better-sqlite3/{src,deps}/**'
+    - '!**/node_modules/better-sqlite3/prebuilds/win32-arm64.node'
+  # LGPL-FFmpeg (gemeinsame DLLs) aus vendor/ – vorher: npm run fetch:ffmpeg -- win32-x64
+  extraResources:
+    - from: vendor/ffmpeg/win32-x64/bin
+      to: ffmpeg
+    - from: vendor/ffmpeg/win32-x64/LICENSE.txt
+      to: ffmpeg/LICENSE.txt
+  target:
+    - target: nsis
+      arch: [x64]
+    - target: portable
+      arch: [x64]
+  icon: resources/icon.png
+  # Icon/Versionsinfo per rcedit setzen (unter Linux/macOS via Wine). Signiert wird nur, wenn ein
+  # Zertifikat konfiguriert ist (CSC_LINK / CSC_KEY_PASSWORD bzw. win.azureSignOptions) – siehe README.
+  signAndEditExecutable: true
+  artifactName: 'PhotoPack-Manager-${version}-win-x64.${ext}'
+nsis:
+  oneClick: false
+  perMachine: false
+  allowToChangeInstallationDirectory: true
+  createDesktopShortcut: true
+  shortcutName: PhotoPack Manager
+  artifactName: 'PhotoPack-Manager-${version}-Setup.${ext}'
+portable:
+  artifactName: 'PhotoPack-Manager-${version}-portable.${ext}'
+linux:
+  target: [dir]
+  extraResources:
+    - from: vendor/ffmpeg/linux-x64
+      to: ffmpeg
+  files:
+    - '!**/node_modules/exiftool-vendored.exe/**'
+    - '!**/node_modules/@img/sharp-win32*/**'
+extraResources:
+  - from: THIRD_PARTY_NOTICES.md
+    to: THIRD_PARTY_NOTICES.md

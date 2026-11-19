@@ -128,6 +128,8 @@ Ergebnisse des letzten Laufs: [TEST_REPORT.md](TEST_REPORT.md).
    Installer, portable EXE und ZIP (inkl. LGPL-FFmpeg) und legt den GitHub-Release mit Prüfsummen an
    (Versionen mit Bindestrich, z. B. `-beta.1`, als Vorabversion).
 3. Signierung: Secrets `CSC_LINK` (Base64-PFX) und `CSC_KEY_PASSWORD` im Repository hinterlegen.
+4. Release-Text nachträglich ändern: `docs/release-notes/v<version>.md` anpassen, nach `main` bringen und
+   *Actions → Release-Notizen aktualisieren → Run workflow* mit dem Tag starten (ohne Neubau).
 
 Der Workflow **CI** prüft jeden Push und Pull Request auf Windows und Linux. Dependabot schlägt wöchentlich
 Aktualisierungen von npm-Paketen und GitHub-Actions vor.

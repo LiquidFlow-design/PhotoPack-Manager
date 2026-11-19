@@ -88,15 +88,19 @@ jobs:
             release/ffmpeg-MANIFEST.json
           retention-days: 30
       - name: GitHub-Release anlegen
-        shell: pwsh
+        # bash statt PowerShell: Argument-Arrays werden unverändert an gh übergeben
+        shell: bash
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
-          $notes = "docs/release-notes/$env:TAG.md"
-          if (-not (Test-Path $notes)) { $notes = "CHANGELOG.md" }
-          $pre = if ($env:VERSION -match '-') { '--prerelease' } else { '' }
-          $assets = (Get-ChildItem release -File | Where-Object { $_.Extension -in '.exe', '.zip' -or $_.Name -in 'SHA256SUMS.txt', 'ffmpeg-MANIFEST.json' }).FullName
-          $tagArgs = if ($env:TAG_EXISTS -eq 'true') { @('--verify-tag') } else { @('--target', $env:GITHUB_SHA) }
-          $preArgs = if ($pre) { @($pre) } else { @() }
-          gh release create $env:TAG @assets --title "PhotoPack Manager $env:VERSION" --notes-file $notes @preArgs @tagArgs
-          if ($LASTEXITCODE -ne 0) { throw "gh release create fehlgeschlagen ($LASTEXITCODE)" }
+          set -euo pipefail
+          notes="docs/release-notes/${TAG}.md"
+          [ -f "$notes" ] || notes="CHANGELOG.md"
+          args=(release create "$TAG")
+          shopt -s nullglob
+          for f in release/*.exe release/*.zip release/SHA256SUMS.txt release/ffmpeg-MANIFEST.json; do args+=("$f"); done
+          args+=(--title "PhotoPack Manager ${VERSION}" --notes-file "$notes")
+          case "$VERSION" in *-*) args+=(--prerelease) ;; esac
+          if [ "${TAG_EXISTS:-false}" = "true" ]; then args+=(--verify-tag); else args+=(--target "$GITHUB_SHA"); fi
+          printf '%q ' gh "${args[@]}"; echo
+          gh "${args[@]}"

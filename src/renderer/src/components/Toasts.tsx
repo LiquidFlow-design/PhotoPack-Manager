@@ -18,6 +18,17 @@ export function Toasts() {
             <Info size={16} className="muted" />
           )}
           <span>{t.text}</span>
+          {t.action && (
+            <button
+              className="btn sm"
+              onClick={() => {
+                t.action!.run()
+                dismiss(t.id)
+              }}
+            >
+              {t.action.label}
+            </button>
+          )}
           <button className="icon-btn ghost sm" aria-label="Hinweis schließen" onClick={() => dismiss(t.id)}>
             <X size={14} />
           </button>

@@ -56,7 +56,7 @@ test('12.000 Medien: Laden, Scrollen, Auswahl, Zuordnung', async () => {
     r.select_all_ms = Date.now() - t
     t = Date.now()
     await page.keyboard.press('1')
-    await expect(page.getByRole('button', { name: /^Anna, Taste 1/ })).toHaveAttribute('aria-pressed', 'true')
+    await expect(page.getByRole('button', { name: /^Anna .*Taste 1$/ })).toHaveAttribute('aria-pressed', 'true')
     r.assign_all_ms = Date.now() - t
 
     // Filter auf großer Liste

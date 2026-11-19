@@ -225,7 +225,6 @@ const Tile = memo(function Tile({
       id={`tile-${m.id}`}
       role="option"
       aria-selected={selected}
-      aria-label={`${pos ? `Position ${pos}, ` : ''}${m.name}, ${kindTag}${m.rating ? `, ${m.rating} Sterne` : ''}${status ? ', ' + status : ''}${pkgs.length ? `, ${pkgs.length} Pakete` : ''}`}
       className={'tile' + (selected ? ' selected' : '') + (active ? ' active' : '') + (dropSide ? ' drop-' + dropSide : '')}
       data-mid={m.id}
       draggable={draggable}
@@ -277,6 +276,10 @@ const Tile = memo(function Tile({
         <div className="tile-name ellipsis" title={m.relDir ? `${m.relDir}/${m.name}` : m.name}>
           {m.name}
         </div>
+        <span className="sr-only">
+          {m.rating ? `, ${m.rating} Sterne` : ''}
+          {pkgs.length ? `, Pakete: ${pkgs.map((x) => x.p.name).join(', ')}` : ''}
+        </span>
         <div className="tile-info">
           <span>{fmtBytes(m.size)}</span>
           {m.rating > 0 && (

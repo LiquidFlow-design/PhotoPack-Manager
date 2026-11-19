@@ -49,7 +49,7 @@ test.describe.serial('Version 2', () => {
     await tile('DSC_0500.JPG').click()
     await page.keyboard.press('2')
     await tile('DSC_0500.CR2').click()
-    await expect(page.getByRole('button', { name: /^Max, Taste 2/ })).toHaveAttribute('aria-pressed', 'true')
+    await expect(page.getByRole('button', { name: /^Max .*Taste 2$/ })).toHaveAttribute('aria-pressed', 'true')
   })
 
   test('Paketansicht: Inhalt, Drag & Drop, Tastatur, Entfernen', async () => {
@@ -116,6 +116,20 @@ test.describe.serial('Version 2', () => {
     await expect(page.getByText(/^1 von/)).toBeVisible()
     await page.keyboard.press('Escape')
     await page.getByRole('button', { name: 'Alle Filter zurücksetzen' }).click()
+  })
+
+  test('Sofortmodus: „Rückgängig“ im Hinweis verhindert die Übertragung', async () => {
+    const { page } = h
+    await page.getByRole('radio', { name: 'Sofort' }).click()
+    await tile('IMG_0007.jpg').click()
+    await page.keyboard.press('1')
+    const undo = page.locator('.toast').getByRole('button', { name: 'Rückgängig' })
+    await expect(undo).toBeVisible()
+    await undo.click()
+    await expect(page.getByRole('button', { name: /^Anna .*Taste 1$/ })).toHaveAttribute('aria-pressed', 'false')
+    await page.waitForTimeout(4000)
+    expect(fs.existsSync(path.join(out, 'Anna', 'IMG_0007.jpg'))).toBe(false)
+    await page.getByRole('radio', { name: 'Sammeln' }).click()
   })
 
   test('Präsentationsfenster folgt dem aktiven Medium', async () => {

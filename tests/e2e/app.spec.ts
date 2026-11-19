@@ -53,7 +53,7 @@ test.describe.serial('PhotoPack Manager – Kern-Workflows', () => {
     const { page } = h
     await (await tile('IMG_0002.jpg')).click()
     await page.keyboard.press('1')
-    const anna = page.getByRole('button', { name: /^Anna, Taste 1/ })
+    const anna = page.getByRole('button', { name: /^Anna .*Taste 1$/ })
     await expect(anna).toHaveAttribute('aria-pressed', 'true')
     // Mehrfachauswahl mit Strg+Klick -> teilweise
     await (await tile('IMG_0003.jpg')).click({ modifiers: ['Control'] })
@@ -81,7 +81,7 @@ test.describe.serial('PhotoPack Manager – Kern-Workflows', () => {
   test('Paketkürzel werden während Texteingabe nicht ausgelöst', async () => {
     const { page } = h
     await (await tile('IMG_0006.jpg')).click()
-    const max = page.getByRole('button', { name: /^Max, Taste 2/ })
+    const max = page.getByRole('button', { name: /^Max .*Taste 2$/ })
     await expect(max).toHaveAttribute('aria-pressed', 'false')
     await page.locator('#media-search').fill('')
     await page.locator('#media-search').type('2')
@@ -98,7 +98,7 @@ test.describe.serial('PhotoPack Manager – Kern-Workflows', () => {
     await page.keyboard.press('2')
     await expect(page.locator('.tile.active .tile-name')).toHaveText('IMG_0009.jpg')
     await (await tile('IMG_0008.jpg')).click()
-    await expect(page.getByRole('button', { name: /^Max, Taste 2/ })).toHaveAttribute('aria-pressed', 'true')
+    await expect(page.getByRole('button', { name: /^Max .*Taste 2$/ })).toHaveAttribute('aria-pressed', 'true')
     await qa.selectOption('stage')
     await (await tile('IMG_0010.jpg')).click()
     await page.keyboard.press('1')
@@ -107,18 +107,18 @@ test.describe.serial('PhotoPack Manager – Kern-Workflows', () => {
     await page.keyboard.press('Enter')
     await expect(page.locator('.tile.active .tile-name')).toHaveText('IMG_0011.jpg')
     await (await tile('IMG_0010.jpg')).click()
-    await expect(page.getByRole('button', { name: /^Anna, Taste 1/ })).toHaveAttribute('aria-pressed', 'true')
-    await expect(page.getByRole('button', { name: /^Familie, Taste 3/ })).toHaveAttribute('aria-pressed', 'true')
-    await expect(page.getByRole('button', { name: /^Max, Taste 2/ })).toHaveAttribute('aria-pressed', 'false')
+    await expect(page.getByRole('button', { name: /^Anna .*Taste 1$/ })).toHaveAttribute('aria-pressed', 'true')
+    await expect(page.getByRole('button', { name: /^Familie .*Taste 3$/ })).toHaveAttribute('aria-pressed', 'true')
+    await expect(page.getByRole('button', { name: /^Max .*Taste 2$/ })).toHaveAttribute('aria-pressed', 'false')
     // Rückgängig nimmt beide gebündelten Zuordnungen zurück
     await page.keyboard.press('Control+z')
-    await expect(page.getByRole('button', { name: /^Anna, Taste 1/ })).toHaveAttribute('aria-pressed', 'false')
-    await expect(page.getByRole('button', { name: /^Familie, Taste 3/ })).toHaveAttribute('aria-pressed', 'false')
+    await expect(page.getByRole('button', { name: /^Anna .*Taste 1$/ })).toHaveAttribute('aria-pressed', 'false')
+    await expect(page.getByRole('button', { name: /^Familie .*Taste 3$/ })).toHaveAttribute('aria-pressed', 'false')
     // Max-Zuordnung von IMG_0008 entfernen, damit spätere Zählungen stimmen
     await (await tile('IMG_0008.jpg')).click()
     await qa.selectOption('stay')
     await page.keyboard.press('2')
-    await expect(page.getByRole('button', { name: /^Max, Taste 2/ })).toHaveAttribute('aria-pressed', 'false')
+    await expect(page.getByRole('button', { name: /^Max .*Taste 2$/ })).toHaveAttribute('aria-pressed', 'false')
   })
 
   test('Filter-Popover: Kombinationen, Chips, Clear-all, Tastatur', async () => {
@@ -207,15 +207,20 @@ test.describe.serial('PhotoPack Manager – Kern-Workflows', () => {
     await page.getByRole('button', { name: /^Farbschema/ }).click() // system -> hell
     await page.getByRole('button', { name: /^Farbschema/ }).click() // hell -> dunkel
     await expect(page.locator('html')).toHaveAttribute('data-theme', 'dark')
+    // Fensterlage wird gespeichert (Windows-Erwartung: öffnet wie geschlossen)
+    await h.app.evaluate(({ BrowserWindow }) => BrowserWindow.getAllWindows()[0].setBounds({ x: 40, y: 30, width: 1111, height: 700 }))
+    await page.waitForTimeout(800)
     await h.close()
     h = await launch(userData)
+    const b = await h.app.evaluate(({ BrowserWindow }) => BrowserWindow.getAllWindows()[0].getBounds())
+    expect([b.width, b.height]).toEqual([1111, 700])
     const p2 = h.page
     await expect(p2.getByText(/von 25 Medien/)).toBeVisible()
     await expect(p2.locator('html')).toHaveAttribute('data-theme', 'dark')
-    await expect(p2.getByRole('button', { name: /^Anna, Taste 1/ })).toBeVisible()
+    await expect(p2.getByRole('button', { name: /^Anna .*Taste 1$/ })).toBeVisible()
     await expect(p2.locator('.pkg-name', { hasText: 'Familie' })).toBeVisible()
     await (await tile('IMG_0003.jpg')).click()
-    await expect(p2.getByRole('button', { name: /^Anna, Taste 1/ })).toHaveAttribute('aria-pressed', 'true')
+    await expect(p2.getByRole('button', { name: /^Anna .*Taste 1$/ })).toHaveAttribute('aria-pressed', 'true')
     await h.close()
   })
 })

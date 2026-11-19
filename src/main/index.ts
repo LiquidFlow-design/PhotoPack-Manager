@@ -14,6 +14,8 @@ import { getSettings } from './core/settings'
 if (process.env.PPM_USER_DATA) app.setPath('userData', process.env.PPM_USER_DATA)
 
 registerSchemePrivileges()
+// Eindeutige Kennung für Taskleiste/Benachrichtigungen (auch für die portable Version)
+if (process.platform === 'win32') app.setAppUserModelId('de.photopack.manager')
 
 let svc: AppService | null = null
 let win: BrowserWindow | null = null
@@ -150,11 +152,49 @@ async function start(): Promise<void> {
   createWindow()
 }
 
+interface WinState {
+  x?: number
+  y?: number
+  width: number
+  height: number
+  maximized: boolean
+}
+
+/** Gespeicherte Fensterlage nur übernehmen, wenn sie auf einem vorhandenen Bildschirm liegt. */
+function restoreBounds(): WinState {
+  const fallback: WinState = { width: 1440, height: 900, maximized: false }
+  const s = svc?.db.prepare("SELECT value FROM app_settings WHERE key = 'window'").get() as { value: string } | undefined
+  if (!s) return fallback
+  try {
+    const w = JSON.parse(s.value) as WinState
+    if (w.x == null || w.y == null) return { ...fallback, ...w }
+    const visible = screen.getAllDisplays().some((d) => {
+      const a = d.workArea
+      return w.x! < a.x + a.width - 100 && w.x! + w.width > a.x + 100 && w.y! >= a.y - 10 && w.y! < a.y + a.height - 100
+    })
+    return visible ? w : { ...fallback, maximized: w.maximized }
+  } catch {
+    return fallback
+  }
+}
+
+function saveBounds(): void {
+  if (!win || win.isDestroyed() || !svc || win.isMinimized()) return
+  const b = win.getNormalBounds()
+  const v: WinState = { x: b.x, y: b.y, width: b.width, height: b.height, maximized: win.isMaximized() }
+  svc.db
+    .prepare("INSERT INTO app_settings (key, value, updated_at) VALUES ('window', ?, ?) ON CONFLICT(key) DO UPDATE SET value = excluded.value, updated_at = excluded.updated_at")
+    .run(JSON.stringify(v), Date.now())
+}
+
 function createWindow(): void {
   const dark = nativeTheme.shouldUseDarkColors
+  const ws = restoreBounds()
   win = new BrowserWindow({
-    width: 1440,
-    height: 900,
+    x: ws.x,
+    y: ws.y,
+    width: ws.width,
+    height: ws.height,
     minWidth: 760,
     minHeight: 560,
     show: false,
@@ -164,10 +204,34 @@ function createWindow(): void {
     webPreferences: WEB_PREFS()
   })
   win.setMenuBarVisibility(false)
-  win.once('ready-to-show', () => win?.show())
+  win.once('ready-to-show', () => {
+    if (ws.maximized) win?.maximize()
+    win?.show()
+  })
+  let boundsTimer: NodeJS.Timeout | null = null
+  const scheduleSave = () => {
+    if (boundsTimer) clearTimeout(boundsTimer)
+    boundsTimer = setTimeout(saveBounds, 500)
+  }
+  win.on('resize', scheduleSave)
+  win.on('move', scheduleSave)
+  win.on('maximize', scheduleSave)
+  win.on('unmaximize', scheduleSave)
   // Keine Navigation / keine neuen Fenster aus dem Renderer
   guardNavigation(win)
+  // Windows-Abmeldung/-Herunterfahren: keine Zeit für asynchrones Beenden – Aufträge sofort pausieren,
+  // Datenbank sichern. Unterbrochene Einzelschritte gleicht der Start-Abgleich aus.
+  win.on('session-end', () => {
+    try {
+      saveBounds()
+      svc?.db.prepare("UPDATE jobs SET status='paused', interrupted=1, updated_at=? WHERE status IN ('queued','running')").run(Date.now())
+      svc?.db.pragma('wal_checkpoint(TRUNCATE)')
+    } catch {
+      /* best effort */
+    }
+  })
   win.on('close', (e) => {
+    saveBounds()
     if (quitting || !svc) return
     if (svc.engine.hasActiveWork()) {
       const r = dialog.showMessageBoxSync(win!, {

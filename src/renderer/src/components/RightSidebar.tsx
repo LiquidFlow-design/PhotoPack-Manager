@@ -52,13 +52,11 @@ export function PackageButton({ p, compact = false }: { p: PackageInfo; compact?
     if (quick === 'stage') s.toggleStage(p.id)
     else void s.togglePackage(p.id)
   }
-  const aria = `${p.name}${p.shortcut ? `, Taste ${p.shortcut}` : ''}: ${label}`
   return (
     <button
       className={`pkg state-${selection.size ? t.state : 'none'}${isStaged ? ' staged' : ''}`}
       style={{ ['--pkg' as string]: p.color }}
       onClick={onClick}
-      aria-label={aria}
       aria-pressed={t.state === 'all' ? 'true' : t.state === 'partial' ? 'mixed' : 'false'}
       title={p.effectiveTargetDir ? `Ziel: ${p.effectiveTargetDir}` : 'Kein Zielordner festgelegt'}
     >
@@ -79,7 +77,13 @@ export function PackageButton({ p, compact = false }: { p: PackageInfo; compact?
           </span>
         )}
       </span>
-      {p.shortcut != null && <span className="kbd">{p.shortcut}</span>}
+      {compact && <span className="sr-only">{label}</span>}
+      {p.shortcut != null && (
+        <span className="kbd">
+          <span className="sr-only">Taste </span>
+          {p.shortcut}
+        </span>
+      )}
     </button>
   )
 }
@@ -269,7 +273,10 @@ export function RightSidebar({ collapsed, auto }: { collapsed: boolean; auto: bo
         <button className="btn block" style={{ marginTop: 8 }} onClick={() => void chooseDirFlow('output')}>
           <FolderOutput size={15} /> Ausgabeordner wählen
         </button>
-        <button className="btn primary block" style={{ marginTop: 8 }} onClick={() => s.openDialog({ type: 'export' })}>
+      </div>
+      {/* Immer sichtbar, auch auf kleinen Bildschirmen */}
+      <div className="sidebar-foot">
+        <button className="btn primary block" onClick={() => s.openDialog({ type: 'export' })}>
           <Send size={15} /> Exportvorschau öffnen{pendingTotal ? ` (${pendingTotal.toLocaleString('de-DE')})` : ''}
         </button>
       </div>

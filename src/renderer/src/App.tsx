@@ -54,15 +54,16 @@ export function App() {
   }, [settings?.reducedMotion])
 
   const layout = settings?.layout
-  // Bei engen Fenstern automatisch einklappen (rechts zuerst), ohne die gespeicherte Präferenz zu ändern
+  // Bei engen Fenstern automatisch einklappen (links zuerst), ohne die gespeicherte Präferenz zu ändern
   const { leftCollapsed, rightCollapsed } = useMemo(() => {
     if (!layout) return { leftCollapsed: false, rightCollapsed: false }
     let lc = layout.leftCollapsed
     let rc = layout.rightCollapsed
     const avail = winW - PADDING
     const need = () => (lc ? 44 : layout.leftWidth) + (rc ? 44 : layout.rightWidth) + MIN_CENTER
-    if (need() > avail && !rc) rc = true
+    // Quellenleiste zuerst einklappen – die Paketleiste wird zum Zuordnen gebraucht
     if (need() > avail && !lc) lc = true
+    if (need() > avail && !rc) rc = true
     return { leftCollapsed: lc, rightCollapsed: rc }
   }, [layout, winW])
   const autoCollapsed = !!layout && (leftCollapsed !== layout.leftCollapsed || rightCollapsed !== layout.rightCollapsed)

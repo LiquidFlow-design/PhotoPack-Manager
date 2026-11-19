@@ -113,7 +113,7 @@ export function FocusView() {
       </div>
       <div className="focus-pkgs" role="group" aria-label="Pakete für dieses Medium">
         {packages.map((p) => (
-          <div key={p.id} style={{ minWidth: 150, maxWidth: 220, flex: '0 1 200px' }}>
+          <div key={p.id} style={{ minWidth: 130, maxWidth: 200, flex: '0 0 auto' }}>
             <PackageButton p={p} compact />
           </div>
         ))}

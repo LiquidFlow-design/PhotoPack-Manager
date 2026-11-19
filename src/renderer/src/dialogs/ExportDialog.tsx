@@ -3,6 +3,7 @@ import { useCallback, useEffect, useState } from 'react'
 import type { ConflictPolicy, ExportPlanPreview, Operation } from '@shared/types'
 import { api } from '../lib/api'
 import { fmtBytes } from '../lib/format'
+import { chooseDirFlow } from '../lib/flows'
 import { useStore } from '../state/store'
 import { Modal } from './Modal'
 
@@ -145,7 +146,18 @@ export function ExportDialog({ packageIds }: { packageIds: string[] | null }) {
 
           {preview.blockingErrors.map((b) => (
             <div className="callout err" key={b}>
-              <XCircle size={16} /> {b}
+              <XCircle size={16} /> <span style={{ flex: 1 }}>{b}</span>
+              {/keinen Zielordner/.test(b) && (
+                <button
+                  className="btn sm"
+                  onClick={async () => {
+                    await chooseDirFlow('output')
+                    await load()
+                  }}
+                >
+                  Ausgabeordner wählen
+                </button>
+              )}
             </div>
           ))}
           {preview.warnings.map((w) => (

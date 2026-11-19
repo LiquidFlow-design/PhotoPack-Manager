@@ -494,7 +494,8 @@ export function registerIpc(getSvc: () => AppService, win: WindowHooks): void {
       ipcMain.handle(channel(group, m), async (event, ...args): Promise<Result<unknown>> => {
         // Nur Anfragen aus dem eigenen Hauptfenster akzeptieren
         const url = event.senderFrame?.url ?? ''
-        if (!url.startsWith('file://') && !url.startsWith('http://localhost') && !url.startsWith('http://127.0.0.1')) {
+        const dev = !!process.env.ELECTRON_RENDERER_URL && !app.isPackaged
+        if (!url.startsWith('file://') && !(dev && (url.startsWith('http://localhost') || url.startsWith('http://127.0.0.1')))) {
           return { ok: false, error: 'Unzulässiger Absender' }
         }
         const parsed = def.args.safeParse(args)

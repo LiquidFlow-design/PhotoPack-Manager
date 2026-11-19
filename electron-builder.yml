@@ -15,6 +15,14 @@ asarUnpack:
   - '**/node_modules/exiftool-vendored.exe/**'
   - '**/node_modules/exiftool-vendored.pl/**'
   - '**/node_modules/better-sqlite3/**'
+# Härtung: EXE nicht als Node-Laufzeit missbrauchbar, App nur aus dem (integritätsgeprüften) asar-Archiv
+electronFuses:
+  runAsNode: false
+  enableCookieEncryption: true
+  enableNodeOptionsEnvironmentVariable: false
+  enableNodeCliInspectArguments: false
+  enableEmbeddedAsarIntegrityValidation: true
+  onlyLoadAppFromAsar: true
 # Native Module liegen als N-API-Prebuilds vor -> kein Neukompilieren nötig
 npmRebuild: false
 nodeGypRebuild: false

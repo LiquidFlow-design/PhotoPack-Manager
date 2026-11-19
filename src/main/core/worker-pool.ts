@@ -43,7 +43,7 @@ export class WorkerFileOps implements FileOps {
         p.reject(e)
       } else p.resolve(msg.result!)
     })
-    w.on('error', (err) => this.failWorker(w, err))
+    w.on('error', (err) => this.failWorker(w, err instanceof Error ? err : new Error(String(err))))
     w.on('exit', (code) => {
       if (code !== 0) this.failWorker(w, new Error(`Worker beendet (${code})`))
     })

@@ -37,6 +37,7 @@ export interface Project {
   workMode: WorkMode
   operation: Operation
   conflictPolicy: ConflictPolicy
+  numberPrefix: boolean // Paketreihenfolge als „001_“ voranstellen
   recoveryDir: string // effektiver Pfad
   recoveryDirCustom: boolean
   ui: ProjectUiState
@@ -269,6 +270,7 @@ export interface ExportPlanOptions {
   operation: Operation
   conflictPolicy: ConflictPolicy
   reexportMissing: boolean
+  numberPrefix?: boolean // Standard: Projekteinstellung
 }
 
 // ---------- Recovery ----------
@@ -382,6 +384,7 @@ export type AppEvent =
   | { type: 'presenter-show'; mediaId: number | null }
   | { type: 'presenter-nav'; delta: number }
   | { type: 'presenter-closed' }
+  | { type: 'job-finished'; projectId: string; jobId: string; status: JobStatus; mode: WorkMode; label: string; done: number; failed: number }
 
 export interface StartupInfo {
   version: string
@@ -391,6 +394,7 @@ export interface StartupInfo {
   interruptedJobs: number
   tools: { exiftool: boolean; ffmpeg: boolean; ffprobe: boolean; sharp: boolean }
   fileOps: 'worker' | 'inline'
+  portable: { dir: string | null; fallback: boolean }
 }
 
 export interface ProjectBundle {

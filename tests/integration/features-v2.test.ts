@@ -125,6 +125,21 @@ describe('Reihenfolge in Paketen', () => {
     expect(packageOrder(env.ctx, A)).toEqual([b, c, a, d])
   })
 
+  it('Paketreihenfolge als Nummer im Dateinamen (inkl. Sidecar)', async () => {
+    env = await makeEnv({ 'b.jpg': content('b'), 'a.NEF': content('a'), 'a.NEF.xmp': 'x', 'c.jpg': content('c') })
+    const A = pkg(env, 'Anna')
+    const [a, b, c] = ['a.NEF', 'b.jpg', 'c.jpg'].map((f) => mediaId(env!, f))
+    await assign(env, [
+      [b, A],
+      [a, A],
+      [c, A]
+    ])
+    reorderPackage(env.ctx, A, [c, b, a])
+    updateProjectSettings(env.ctx, env.projectId, { numberPrefix: true })
+    await exportAll(env)
+    expect(listFiles(path.join(env.outDir, 'Anna'))).toEqual(['001_c.jpg', '002_b.jpg', '003_a.NEF', '003_a.NEF.xmp'])
+  })
+
   it('ZIP-Export folgt der Paketreihenfolge, liest nur und überspringt veränderte Quellen', async () => {
     env = await makeEnv({ 'x/a.jpg': content('a'), 'y/a.jpg': content('a2'), 'b.jpg': content('b'), 'c.NEF': content('c'), 'c.NEF.xmp': 'side' })
     const A = pkg(env, 'Anna')

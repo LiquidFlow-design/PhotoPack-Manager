@@ -98,6 +98,21 @@ export async function buildPlan(
   let fromExportCopies = 0
   const createdDirs: string[] = []
   const plannedNames = new Map<string, string>()
+  // Paketreihenfolge als Nummer: Position unter allen Hauptmedien des Pakets (stabil, unabhängig vom Planumfang)
+  const numberPrefix = opts.numberPrefix ?? project.numberPrefix
+  const orderCache = new Map<string, Map<number, { n: number; width: number }>>()
+  const orderOf = (pkgId: string) => {
+    let m = orderCache.get(pkgId)
+    if (!m) {
+      const ids = ctx.db
+        .prepare("SELECT mp.media_id FROM media_packages mp JOIN media x ON x.id = mp.media_id AND x.role = 'main' WHERE mp.package_id = ? ORDER BY mp.position, mp.assigned_at")
+        .all(pkgId) as Array<{ media_id: number }>
+      const width = Math.max(3, String(ids.length).length)
+      m = new Map(ids.map((r, i) => [r.media_id, { n: i + 1, width }]))
+      orderCache.set(pkgId, m)
+    }
+    return m
+  }
 
   const sources = ctx.db.prepare('SELECT path, real_path FROM sources WHERE project_id = ?').all(projectId) as Array<{ path: string; real_path: string }>
   const srcExistsCache = new Map<string, boolean>()
@@ -203,6 +218,10 @@ export async function buildPlan(
     const taken = await namesIn(targetDir)
     let n = 1
     let baseDest = r.file_name
+    if (numberPrefix && r.role === 'main') {
+      const pos = orderOf(r.package_id).get(r.media_id)
+      if (pos) baseDest = `${String(pos.n).padStart(pos.width, '0')}_${r.file_name}`
+    }
     if (r.role === 'sidecar' && r.parent_id) {
       // Sidecar folgt dem Zielnamen seines Hauptmediums (z. B. „IMG_1 (2).CR3“ → „IMG_1 (2).CR3.xmp“)
       const parent = plannedNames.get(`${r.parent_id}:${r.package_id}`)

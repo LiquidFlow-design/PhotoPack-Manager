@@ -151,3 +151,58 @@ test.describe.serial('Version 2', () => {
     await h.close()
   })
 })
+
+test.describe.serial('Design 2, Kontextmenü, Ablegen aus dem Explorer', () => {
+  let h2: AppHandle
+  test('Kontextmenü: Pakete, Bewertung, Tastatur (Umschalt+F10, Esc)', async () => {
+    h2 = await launch(path.join(root, 'ud'))
+    const { page } = h2
+    await expect(page.getByText(/von \d+ Medien/)).toBeVisible()
+    const t = h2.page.locator('.tile', { has: h2.page.locator('.tile-name', { hasText: /^IMG_0008\.jpg$/ }) }).first()
+    await t.click({ button: 'right' })
+    const menu = page.getByRole('menu', { name: 'Aktionen für die Auswahl' })
+    await expect(menu).toBeVisible()
+    await menu.getByRole('menuitemcheckbox', { name: /Max/ }).click()
+    await expect(menu).toBeHidden()
+    await expect(page.getByRole('button', { name: /^Max .*Taste 2$/ })).toHaveAttribute('aria-pressed', 'true')
+    // Tastatur
+    await page.locator('.gallery').focus()
+    await page.keyboard.press('Shift+F10')
+    await expect(menu).toBeVisible()
+    await expect(menu.getByRole('menuitemcheckbox', { name: /Max/ })).toHaveAttribute('aria-checked', 'true')
+    await menu.getByRole('menuitem', { name: '4 Sterne' }).click()
+    await expect(t.locator('.rating')).toContainText('4')
+    await page.keyboard.press('Shift+F10')
+    await page.keyboard.press('Escape')
+    await expect(menu).toBeHidden()
+  })
+
+  test('Ablegen: Dateien ohne echten Pfad werden abgewiesen, Datei statt Ordner wird gemeldet', async () => {
+    const { page } = h2
+    // Künstliche Datei (kein Pfad auf dem Datenträger) → die Seite kann keine Pfade vortäuschen
+    const r = await page.evaluate(async () => {
+      const pid = (await window.ppm.projects.list())[0].id
+      try {
+        await window.ppm.dropSources(pid, [new File(['x'], 'C:\\\\Windows\\\\System32')])
+        return 'angenommen'
+      } catch (e) {
+        return (e as Error).message
+      }
+    })
+    expect(r).toMatch(/Ungültige Eingabe/)
+    // Overlay erscheint beim Ziehen von Dateien
+    await page.evaluate(() => {
+      const dt = new DataTransfer()
+      dt.items.add(new File(['x'], 'a.txt'))
+      window.dispatchEvent(new DragEvent('dragenter', { dataTransfer: dt }))
+    })
+    await expect(page.getByText('Ordner hier ablegen')).toBeVisible()
+    await page.evaluate(() => {
+      const dt = new DataTransfer()
+      dt.items.add(new File(['x'], 'a.txt'))
+      window.dispatchEvent(new DragEvent('drop', { dataTransfer: dt, cancelable: true }))
+    })
+    await expect(page.getByText('Ordner hier ablegen')).toBeHidden()
+    await h2.close()
+  })
+})

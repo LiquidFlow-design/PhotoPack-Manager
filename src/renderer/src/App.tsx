@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from 'react'
+import { useCallback, useEffect, useMemo, useState } from 'react'
 import { api } from './lib/api'
 import { isDark, useStore } from './state/store'
 import { Header } from './components/Header'
@@ -12,6 +12,8 @@ import { Resizer } from './components/Resizer'
 import { Toasts } from './components/Toasts'
 import { DialogHost } from './dialogs/DialogHost'
 import { Welcome } from './components/Welcome'
+import { DropZone } from './components/DropZone'
+import { ContextMenu } from './components/ContextMenu'
 import { useKeyboard } from './lib/keyboard'
 
 const MIN_CENTER = 400
@@ -23,6 +25,8 @@ export function App() {
   const settings = useStore((s) => s.settings)
   const darkSystem = useStore((s) => s.darkSystem)
   const view = useStore((s) => s.view)
+  const contextMenu = useStore((s) => s.contextMenu)
+  const closeMenu = useCallback(() => useStore.setState({ contextMenu: null }), [])
   const [winW, setWinW] = useState(window.innerWidth)
 
   useEffect(() => {
@@ -100,6 +104,8 @@ export function App() {
       <StatusBar />
       <Toasts />
       <DialogHost />
+      <DropZone />
+      {contextMenu && <ContextMenu at={contextMenu} onClose={closeMenu} />}
     </div>
   )
 }

@@ -206,6 +206,13 @@ export function SettingsDialog() {
           <div>Programmdaten</div>
           <div className="desc mono ellipsis">{startup?.userDataDir}</div>
           <div className="desc">
+            {startup?.portable.dir
+              ? 'Portabler Modus: Daten liegen neben dem Programm.'
+              : startup?.portable.fallback
+                ? 'Portabler Modus nicht möglich (Speicherort schreibgeschützt) – Daten im Benutzerprofil.'
+                : 'Für den portablen Modus einen Ordner „PhotoPack-Daten“ neben der EXE anlegen.'}
+          </div>
+          <div className="desc">
             Version {startup?.version} · Decoder: Bilder {startup?.tools.sharp ? '✓' : '–'}, RAW/EXIF {startup?.tools.exiftool ? '✓' : '–'}, Video {startup?.tools.ffmpeg ? '✓' : '–'}
           </div>
         </div>

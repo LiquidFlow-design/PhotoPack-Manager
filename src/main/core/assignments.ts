@@ -126,7 +126,7 @@ export async function applyAssignments(ctx: CoreContext, engine: TransferEngine 
       const { preview, snapshot } = await buildPlan(
         ctx,
         projectId,
-        { packageIds: null, operation: project.operation, conflictPolicy: project.conflictPolicy, reexportMissing: false },
+        { packageIds: null, operation: project.operation, conflictPolicy: project.conflictPolicy, reexportMissing: false, numberPrefix: project.numberPrefix },
         { pairs: applied.added }
       )
       if (preview.blockingErrors.length) {

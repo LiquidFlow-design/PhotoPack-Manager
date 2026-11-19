@@ -97,6 +97,7 @@ export class AppService {
   private thumbTimer: NodeJS.Timeout | null = null
   interruptedJobs = 0
   fileOpsMode: 'worker' | 'inline' = 'inline'
+  portable: { dir: string | null; fallback: boolean } = { dir: null, fallback: false }
   reconcileNotes: string[] = []
 
   constructor(

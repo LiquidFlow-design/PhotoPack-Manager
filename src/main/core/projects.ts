@@ -15,6 +15,7 @@ interface ProjectRow {
   work_mode: WorkMode
   operation: Operation
   conflict_policy: ConflictPolicy
+  number_prefix: number
   recovery_dir: string | null
   ui_state: string
 }
@@ -49,6 +50,7 @@ function toProject(ctx: CoreContext, r: ProjectRow): Project {
     workMode: r.work_mode,
     operation: r.operation,
     conflictPolicy: r.conflict_policy,
+    numberPrefix: !!r.number_prefix,
     recoveryDir: recoveryDirFor(ctx, r.id, r.recovery_dir),
     recoveryDirCustom: !!r.recovery_dir,
     ui: parseUi(r.ui_state)
@@ -117,19 +119,20 @@ export function renameProject(ctx: CoreContext, id: string, name: string): Proje
 export function updateProjectSettings(
   ctx: CoreContext,
   id: string,
-  patch: Partial<{ workMode: WorkMode; operation: Operation; conflictPolicy: ConflictPolicy; outputDir: string | null; recoveryDir: string | null }>
+  patch: Partial<{ workMode: WorkMode; operation: Operation; conflictPolicy: ConflictPolicy; numberPrefix: boolean; outputDir: string | null; recoveryDir: string | null }>
 ): Project {
   const cur = getProject(ctx, id)
   const next = {
     work_mode: patch.workMode ?? cur.workMode,
     operation: patch.operation ?? cur.operation,
     conflict_policy: patch.conflictPolicy ?? cur.conflictPolicy,
+    number_prefix: (patch.numberPrefix ?? cur.numberPrefix) ? 1 : 0,
     output_dir: patch.outputDir !== undefined ? patch.outputDir : cur.outputDir,
     recovery_dir: patch.recoveryDir !== undefined ? patch.recoveryDir : cur.recoveryDirCustom ? cur.recoveryDir : null
   }
   ctx.db
-    .prepare('UPDATE projects SET work_mode=?, operation=?, conflict_policy=?, output_dir=?, recovery_dir=?, updated_at=? WHERE id=?')
-    .run(next.work_mode, next.operation, next.conflict_policy, next.output_dir, next.recovery_dir, ctx.now(), id)
+    .prepare('UPDATE projects SET work_mode=?, operation=?, conflict_policy=?, number_prefix=?, output_dir=?, recovery_dir=?, updated_at=? WHERE id=?')
+    .run(next.work_mode, next.operation, next.conflict_policy, next.number_prefix, next.output_dir, next.recovery_dir, ctx.now(), id)
   oplog(ctx, id, 'info', 'project.settings', 'project', id, patch)
   return getProject(ctx, id)
 }

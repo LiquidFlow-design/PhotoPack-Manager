@@ -79,6 +79,7 @@ interface State {
   undoStack: AssignmentDelta[]
   redoStack: AssignmentDelta[]
   presenterOpen: boolean
+  contextMenu: { x: number; y: number } | null
   jobs: JobSummary[]
   tasks: Record<string, TaskProgress>
   toasts: Toast[]
@@ -232,6 +233,7 @@ export const useStore = create<State & Actions>((set, get) => {
     undoStack: [],
     redoStack: [],
     presenterOpen: false,
+    contextMenu: null,
     jobs: [],
     tasks: {},
     toasts: [],
@@ -247,6 +249,7 @@ export const useStore = create<State & Actions>((set, get) => {
       if (last) await get().openProject(last.id)
       else if (projects.length === 0) set({ dialog: null })
       set({ ready: true })
+      if (startup.portable.fallback) get().toast('warn', 'Portabler Modus nicht möglich (Speicherort schreibgeschützt). Daten werden im Benutzerprofil gespeichert.')
       if (startup.interruptedJobs > 0) {
         get().toast('warn', `${startup.interruptedJobs} unterbrochene(r) Auftrag/Aufträge pausiert. Bitte im Auftragsverlauf prüfen und fortsetzen.`)
       }
@@ -703,6 +706,10 @@ export const useStore = create<State & Actions>((set, get) => {
           set({ tasks: { ...get().tasks, [e.task.id]: e.task } })
           break
         case 'recovery-changed':
+          break
+        case 'job-finished':
+          if (e.mode === 'collect' || e.failed > 0)
+            get().toast(e.failed ? 'warn' : 'success', `${e.label}: ${e.done} erledigt${e.failed ? `, ${e.failed} fehlgeschlagen` : ''}.`)
           break
       }
     }

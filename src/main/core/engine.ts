@@ -795,6 +795,10 @@ export class TransferEngine {
         db.prepare("UPDATE job_items SET active=0 WHERE job_id=? AND status='failed'").run(j.id)
       })()
       oplog(this.ctx, j.project_id, status === 'completed' ? 'info' : 'warn', 'job.finished', 'job', j.id, { status })
+      const sum = db
+        .prepare("SELECT j.label, j.mode, SUM(CASE WHEN i.status IN ('done','skipped') THEN 1 ELSE 0 END) AS done, SUM(CASE WHEN i.status='failed' THEN 1 ELSE 0 END) AS failed FROM jobs j JOIN job_items i ON i.job_id = j.id WHERE j.id = ? AND i.kind != 'release_source'")
+        .get(j.id) as { label: string; mode: WorkMode; done: number | null; failed: number | null }
+      this.ctx.emit({ type: 'job-finished', projectId: j.project_id, jobId: j.id, status, mode: sum.mode, label: sum.label, done: sum.done ?? 0, failed: sum.failed ?? 0 })
       this.changed(j.project_id)
     }
   }
@@ -1281,6 +1285,22 @@ export class TransferEngine {
       this.emitTimer = setTimeout(flush, 200)
       this.emitTimer.unref?.()
     }
+  }
+
+  /** Gesamtfortschritt aller offenen Aufträge (Taskleiste). */
+  overallProgress(): { fraction: number; mode: 'none' | 'normal' | 'paused' | 'error' } {
+    const r = this.ctx.db
+      .prepare(
+        `SELECT COUNT(*) AS total,
+           SUM(CASE WHEN i.status IN ('done','skipped','failed','cancelled') THEN 1 ELSE 0 END) AS fin,
+           SUM(CASE WHEN i.status = 'failed' THEN 1 ELSE 0 END) AS failed,
+           SUM(CASE WHEN j.status IN ('queued','running') THEN 1 ELSE 0 END) AS active
+         FROM job_items i JOIN jobs j ON j.id = i.job_id WHERE j.status IN ('queued','running','paused')`
+      )
+      .get() as { total: number; fin: number | null; failed: number | null; active: number | null }
+    if (!r.total) return { fraction: -1, mode: 'none' }
+    const fraction = (r.fin ?? 0) / r.total
+    return { fraction, mode: (r.failed ?? 0) > 0 ? 'error' : (r.active ?? 0) === 0 ? 'paused' : 'normal' }
   }
 
   hasActiveWork(): boolean {

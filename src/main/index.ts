@@ -1,6 +1,7 @@
 // Einstiegspunkt des Main-Prozesses.
+import fs from 'node:fs'
 import path from 'node:path'
-import { app, BrowserWindow, dialog, Menu, nativeTheme, screen, session } from 'electron'
+import { app, BrowserWindow, dialog, Menu, nativeTheme, Notification, screen, session } from 'electron'
 import { EVENT_CHANNEL } from '@shared/api'
 import type { AppEvent } from '@shared/types'
 import { AppService } from './services/app-service'
@@ -10,8 +11,33 @@ import { WorkerFileOps } from './core/worker-pool'
 import { inlineFileOps } from './core/fileops'
 import { getSettings } from './core/settings'
 
-// Testumgebungen können einen eigenen Datenordner setzen (niemals Nutzerdaten in Tests)
-if (process.env.PPM_USER_DATA) app.setPath('userData', process.env.PPM_USER_DATA)
+// Datenordner: Tests → PPM_USER_DATA; portable EXE → „PhotoPack-Daten“ neben der EXE; ZIP-Version → dort,
+// wenn der Ordner „PhotoPack-Daten“ neben der EXE existiert; sonst %APPDATA%\PhotoPack Manager.
+export const PORTABLE_DIR_NAME = 'PhotoPack-Daten'
+let portableDataDir: string | null = null
+let portableFallback = false
+function selectDataDir(): void {
+  if (process.env.PPM_USER_DATA) {
+    app.setPath('userData', process.env.PPM_USER_DATA)
+    return
+  }
+  if (!app.isPackaged) return
+  const exeDir = path.dirname(app.getPath('exe'))
+  const base = process.env.PORTABLE_EXECUTABLE_DIR || (fs.existsSync(path.join(exeDir, PORTABLE_DIR_NAME)) ? exeDir : null)
+  if (!base) return
+  const dir = path.join(base, PORTABLE_DIR_NAME)
+  try {
+    fs.mkdirSync(dir, { recursive: true })
+    const probe = path.join(dir, `.schreibtest-${process.pid}`)
+    fs.writeFileSync(probe, 'ok')
+    fs.rmSync(probe)
+    app.setPath('userData', dir)
+    portableDataDir = dir
+  } catch {
+    portableFallback = true // z. B. schreibgeschützter Datenträger → %APPDATA%
+  }
+}
+selectDataDir()
 
 registerSchemePrivileges()
 // Eindeutige Kennung für Taskleiste/Benachrichtigungen (auch für die portable Version)
@@ -36,8 +62,43 @@ if (!app.requestSingleInstanceLock()) {
   void app.whenReady().then(start)
 }
 
+let progressTimer: NodeJS.Timeout | null = null
 function send(e: AppEvent): void {
+  if (e.type === 'jobs-changed' && !progressTimer) {
+    progressTimer = setTimeout(() => {
+      progressTimer = null
+      updateTaskbar()
+    }, 400)
+  }
+  if (e.type === 'job-finished') notifyJobFinished(e)
   if (win && !win.isDestroyed()) win.webContents.send(EVENT_CHANNEL, e)
+}
+
+/** Fortschritt in der Windows-Taskleiste (grün, gelb = pausiert, rot = Fehler). */
+function updateTaskbar(): void {
+  if (!win || win.isDestroyed() || !svc) return
+  const p = svc.engine.overallProgress()
+  if (p.mode === 'none') win.setProgressBar(-1)
+  else win.setProgressBar(Math.max(0.02, p.fraction), { mode: p.mode })
+}
+
+/** Windows-Benachrichtigung bei Auftragsende, wenn das Fenster nicht im Vordergrund ist. */
+function notifyJobFinished(e: Extract<AppEvent, { type: 'job-finished' }>): void {
+  const ok = e.status === 'completed'
+  if (e.mode === 'instant' && ok) return // Sofortmodus: nur Fehler melden (sonst eine Meldung je Zuordnung)
+  if (!win || win.isDestroyed() || win.isFocused() || !Notification.isSupported()) return
+  const n = new Notification({
+    title: ok ? 'Auftrag abgeschlossen' : 'Auftrag mit Fehlern beendet',
+    body: `${e.label}\n${e.done} erledigt${e.failed ? `, ${e.failed} fehlgeschlagen` : ''}`,
+    silent: ok
+  })
+  n.on('click', () => {
+    if (!win || win.isDestroyed()) return
+    if (win.isMinimized()) win.restore()
+    win.focus()
+  })
+  n.show()
+  if (!ok) win.flashFrame(true)
 }
 
 function sendPresenter(e: AppEvent): void {
@@ -113,6 +174,7 @@ async function start(): Promise<void> {
   try {
     svc = new AppService(dataDir, fileOps, send)
     svc.fileOpsMode = fileOpsMode
+    svc.portable = { dir: portableDataDir, fallback: portableFallback }
     await svc.init()
   } catch (e) {
     dialog.showErrorBox('PhotoPack Manager', 'Die Datenbank konnte nicht geöffnet werden:\n' + (e as Error).message)

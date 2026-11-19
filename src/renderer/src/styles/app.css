@@ -570,7 +570,7 @@ button:disabled {
   font-weight: 600;
 }
 .nav-item.active .count {
-  color: rgba(255, 255, 255, 0.85);
+  color: #ffffff;
 }
 .nav-item .count {
   margin-left: auto;
@@ -1854,4 +1854,56 @@ button:disabled {
   display: inline-flex;
   align-items: center;
   gap: 3px;
+}
+
+/* ---------- Ablegen aus dem Explorer ---------- */
+.dropzone {
+  position: fixed;
+  inset: 0;
+  z-index: 90;
+  display: grid;
+  place-items: center;
+  background: rgba(11, 11, 18, 0.55);
+  pointer-events: none;
+}
+.dropzone-card {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 8px;
+  padding: 32px 48px;
+  border-radius: 18px;
+  border: 2px dashed var(--accent);
+  background: var(--glass-strong);
+  color: var(--text);
+  box-shadow: var(--shadow);
+}
+.context-menu {
+  width: 270px;
+  max-height: calc(100vh - 16px);
+  overflow: auto;
+}
+.menu-row {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 4px 10px;
+}
+.menu-check {
+  width: 16px;
+  height: 16px;
+  border-radius: 4px;
+  border: 1.5px solid var(--line-strong);
+  display: grid;
+  place-items: center;
+  flex: none;
+}
+.menu-item[aria-checked='true'] .menu-check {
+  background: var(--pkg);
+  border-color: var(--pkg);
+  color: #fff;
+}
+.menu-item[aria-checked='mixed'] .menu-check {
+  border-color: var(--pkg);
+  color: var(--pkg);
 }

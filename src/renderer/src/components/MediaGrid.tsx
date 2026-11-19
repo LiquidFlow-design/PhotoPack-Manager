@@ -237,6 +237,13 @@ const Tile = memo(function Tile({
         useStore.getState().select(m.id, 'single')
         useStore.getState().setView('focus')
       }}
+      onContextMenu={(e) => {
+        e.preventDefault()
+        const st = useStore.getState()
+        if (!st.selection.has(m.id)) st.select(m.id, 'single')
+        else useStore.setState({ active: m.id })
+        useStore.setState({ contextMenu: { x: e.clientX, y: e.clientY } })
+      }}
     >
       <div className="thumb">
         {showImg ? (

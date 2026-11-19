@@ -14,6 +14,7 @@ export function ExportDialog({ packageIds }: { packageIds: string[] | null }) {
   const [operation, setOperation] = useState<Operation>(project.operation)
   const [policy, setPolicy] = useState<ConflictPolicy>(project.conflictPolicy)
   const [reexport, setReexport] = useState(false)
+  const [numberPrefix, setNumberPrefix] = useState(project.numberPrefix)
   const [selected, setSelected] = useState<string[] | null>(packageIds)
   const [preview, setPreview] = useState<ExportPlanPreview | null>(null)
   const [loading, setLoading] = useState(false)
@@ -24,13 +25,13 @@ export function ExportDialog({ packageIds }: { packageIds: string[] | null }) {
     setLoading(true)
     setError(null)
     try {
-      setPreview(await api.exports.preview(project.id, { packageIds: selected, operation, conflictPolicy: policy, reexportMissing: reexport }))
+      setPreview(await api.exports.preview(project.id, { packageIds: selected, operation, conflictPolicy: policy, reexportMissing: reexport, numberPrefix }))
     } catch (e) {
       setError((e as Error).message)
     } finally {
       setLoading(false)
     }
-  }, [project.id, selected, operation, policy, reexport])
+  }, [project.id, selected, operation, policy, reexport, numberPrefix])
 
   useEffect(() => {
     void load()
@@ -40,7 +41,8 @@ export function ExportDialog({ packageIds }: { packageIds: string[] | null }) {
     if (!preview) return
     setStarting(true)
     try {
-      if (operation !== project.operation || policy !== project.conflictPolicy) await api.projects.update(project.id, { operation, conflictPolicy: policy })
+      if (operation !== project.operation || policy !== project.conflictPolicy || numberPrefix !== project.numberPrefix)
+        await api.projects.update(project.id, { operation, conflictPolicy: policy, numberPrefix })
       const r = await api.exports.start(preview.planId)
       close()
       if (r.jobId) {
@@ -100,6 +102,10 @@ export function ExportDialog({ packageIds }: { packageIds: string[] | null }) {
             </button>
           </div>
         </div>
+        <label className="check" style={{ alignSelf: 'flex-end' }} title="z. B. 001_IMG_0003.jpg – die Reihenfolge bleibt im Explorer erhalten">
+          <input type="checkbox" checked={numberPrefix} onChange={(e) => setNumberPrefix(e.target.checked)} />
+          Paketreihenfolge als Nummer voranstellen (001_)
+        </label>
         <label className="check" style={{ alignSelf: 'flex-end' }}>
           <input type="checkbox" checked={reexport} onChange={(e) => setReexport(e.target.checked)} />
           Bereits exportierte, aber am Ziel fehlende Dateien erneut exportieren

@@ -19,13 +19,22 @@ export function useKeyboard(): void {
     const onKey = (e: KeyboardEvent) => {
       const s = useStore.getState()
       if (!s.project) return
-      if (s.dialog) return // Dialoge behandeln Tasten selbst
+      if (s.dialog || s.contextMenu) return // Dialoge/Menüs behandeln Tasten selbst
       if (isTextInput(e.target)) {
         if (e.key === 'Escape') (e.target as HTMLElement).blur()
         return
       }
       if (e.defaultPrevented) return
       const ctrl = e.ctrlKey || e.metaKey
+      // Kontextmenü per Tastatur (Menütaste oder Umschalt+F10)
+      if (e.key === 'ContextMenu' || (e.shiftKey && e.key === 'F10')) {
+        if (s.active == null) return
+        e.preventDefault()
+        if (!s.selection.has(s.active)) s.select(s.active, 'single')
+        const r = document.getElementById(`tile-${s.active}`)?.getBoundingClientRect()
+        useStore.setState({ contextMenu: r ? { x: r.left + 24, y: r.top + 24 } : { x: window.innerWidth / 2, y: window.innerHeight / 3 } })
+        return
+      }
 
       if (ctrl && e.key.toLowerCase() === 'a') {
         e.preventDefault()

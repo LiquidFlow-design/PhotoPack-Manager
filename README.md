@@ -15,6 +15,9 @@ auf mehrere Personen bzw. **Pakete** – vollständig offline, ohne Konto, Cloud
 * **Bewertungen** (Sterne) und **Farbmarkierungen**, Filter und Sortierung danach
 * Exakte **Duplikate** (Größe + SHA-256) und **ähnliche Bilder** (Wahrnehmungs-Hash), ohne automatische Löschung
 * **Präsentationsfenster** für einen zweiten Bildschirm
+* **Proton Drive** (und OneDrive) als Quelle oder Ziel; „Nur online“-Dateien werden nicht ungefragt heruntergeladen
+* Windows-Bedienung: Kontextmenü (Rechtsklick/Umschalt+F10), Ordner aus dem Explorer ins Fenster ziehen,
+  Fortschritt in der Taskleiste, Benachrichtigung bei Auftragsende, portabler Modus
 * Projektsicherung/-import (`.ppmproj`)
 * Hell, Dunkel oder System; verstellbare, einklappbare Seitenleisten
 
@@ -35,8 +38,15 @@ Code-Signatur empfohlen (siehe „Signierung“).
 Programmdaten (Datenbank, Vorschau-Cache, Wiederherstellungsbereich) liegen unter
 `%APPDATA%\PhotoPack Manager\`. Die Mediendateien selbst bleiben im Dateisystem.
 
-**OneDrive:** Ordner in OneDrive werden unterstützt. Dateien mit Status „Nur online verfügbar“ werden beim
-Erzeugen der Vorschau bzw. beim Export heruntergeladen.
+**Proton Drive / OneDrive:** Der Synchronisationsordner des Proton-Drive-Desktop-Clients wird automatisch
+erkannt und erscheint in den Ordnermenüs („Quellordner hinzufügen“, „Ausgabeordner wählen“, Paketziel).
+Dateien mit Status „Nur online verfügbar“ bekommen ein Wolken-Symbol; ihre Vorschau wird nur auf Klick geladen,
+Duplikat-/Ähnlichkeitsprüfung lässt sie aus. Beim Export werden sie heruntergeladen. **Verschieben** aus Proton
+Drive entfernt die Dateien über die Synchronisation auch online – die Originale bleiben im
+Wiederherstellungsbereich; die Exportvorschau weist darauf hin.
+
+**Portabler Modus:** Die portable EXE speichert ihre Daten im Ordner `PhotoPack-Daten` neben der EXE. Bei der
+ZIP-Version genügt es, diesen Ordner anzulegen. Ist der Speicherort schreibgeschützt, wird `%APPDATA%` verwendet.
 
 Prüfbericht und Windows-Abnahmeliste: [AUDIT.md](AUDIT.md).
 
@@ -62,6 +72,7 @@ oder „Mehrere Pakete wählen, dann Enter“.
 | Pfeiltasten, Pos1/Ende | Navigation (Shift erweitert die Auswahl im Raster) |
 | Enter | Fokusansicht / weiter / vorgemerkte Pakete übernehmen |
 | Esc | Dialog/Popover schließen, zurück zum Raster |
+| Menütaste / Umschalt+F10 | Kontextmenü für die Auswahl |
 | Strg+A / Strg+Z / Strg+Y / Strg+F | Alle sichtbaren auswählen / rückgängig / wiederholen / Suche |
 | Alt+0–5 | Bewertung (0 = keine) |
 | Alt+6–9 | Farbmarkierung Rot / Gelb / Grün / Blau (umschalten) |
@@ -71,7 +82,9 @@ oder „Mehrere Pakete wählen, dann Enter“.
 
 ## Entwicklung
 
-Voraussetzungen: Node.js ≥ 22.12, npm.
+Voraussetzungen: **Node.js ≥ 26.13.1 (LTS)** und npm ≥ 11.20 (siehe `.nvmrc`, `engines`; `engine-strict` ist
+aktiv). npm 11 führt Installationsskripte nur nach Freigabe aus; freigegeben ist nur `ffmpeg-static`
+(Entwicklungs-FFmpeg), siehe `allowScripts` in `package.json`.
 
 ```bash
 npm install

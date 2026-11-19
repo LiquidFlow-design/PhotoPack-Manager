@@ -67,7 +67,7 @@ export interface PpmApi {
     open(id: string): Promise<ProjectBundle>
     rename(id: string, name: string): Promise<Project>
     remove(id: string): Promise<{ recoveryDirKept: string | null; recoveryFiles: number }>
-    update(id: string, patch: { workMode?: WorkMode; operation?: Operation; conflictPolicy?: ConflictPolicy }): Promise<Project>
+    update(id: string, patch: { workMode?: WorkMode; operation?: Operation; conflictPolicy?: ConflictPolicy; numberPrefix?: boolean }): Promise<Project>
     saveUi(id: string, ui: ProjectUiState): Promise<void>
     chooseOutputDir(id: string, confirmToken?: string, cloudRootId?: string): Promise<ChooseDirResult>
     clearOutputDir(id: string): Promise<Project>
@@ -140,6 +140,8 @@ export interface PpmApi {
     similarGroups(projectId: string): Promise<SimilarGroup[]>
   }
   onEvent(cb: (e: AppEvent) => void): () => void
+  /** Ordner aus dem Explorer als Quellen hinzufügen (Pfade ermittelt die Preload-Schicht). */
+  dropSources(projectId: string, files: File[]): Promise<AddSourceResult[]>
 }
 
 /** Liste aller Methoden je Gruppe – Preload und Main leiten daraus Kanalnamen ab. */
@@ -173,4 +175,5 @@ export const API_METHODS = {
 } as const
 
 export const EVENT_CHANNEL = 'ppm:event'
+export const DROP_CHANNEL = 'ppm:sources.addDropped'
 export const channel = (group: string, method: string): string => `ppm:${group}.${method}`

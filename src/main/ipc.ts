@@ -4,7 +4,7 @@ import fs from 'node:fs'
 import path from 'node:path'
 import { app, BrowserWindow, dialog, ipcMain, shell } from 'electron'
 import { z } from 'zod'
-import { API_METHODS, channel, type AddSourceResult, type ChooseDirResult, type Result } from '@shared/api'
+import { API_METHODS, DROP_CHANNEL, channel, type AddSourceResult, type ChooseDirResult, type Result } from '@shared/api'
 import { DEFAULT_SETTINGS, type AppSettings, type ColorLabel } from '@shared/types'
 import type { AppService } from './services/app-service'
 import { createProject, deleteProject, getProject, renameProject, saveUiState, updateProjectSettings } from './core/projects'
@@ -157,7 +157,8 @@ export function registerIpc(getSvc: () => AppService, win: WindowHooks): void {
             dbPath: s.dbPath,
             interruptedJobs: s.interruptedJobs,
             tools: s.media.status(),
-            fileOps: s.fileOpsMode
+            fileOps: s.fileOpsMode,
+            portable: s.portable
           }
         }
       },
@@ -193,7 +194,7 @@ export function registerIpc(getSvc: () => AppService, win: WindowHooks): void {
         }
       },
       update: {
-        args: z.tuple([id, z.object({ workMode: workMode.optional(), operation: operation.optional(), conflictPolicy: conflict.optional() }).strict()]),
+        args: z.tuple([id, z.object({ workMode: workMode.optional(), operation: operation.optional(), conflictPolicy: conflict.optional(), numberPrefix: z.boolean().optional() }).strict()]),
         fn: (pid: string, patch: object) => updateProjectSettings(getSvc().ctx, pid, patch)
       },
       saveUi: { args: z.tuple([id, uiSchema]), fn: (pid: string, ui: z.infer<typeof uiSchema>) => saveUiState(getSvc().ctx, pid, ui) },
@@ -445,7 +446,7 @@ export function registerIpc(getSvc: () => AppService, win: WindowHooks): void {
       preview: {
         args: z.tuple([
           id,
-          z.object({ packageIds: z.array(id).nullable(), operation, conflictPolicy: conflict, reexportMissing: z.boolean() }).strict()
+          z.object({ packageIds: z.array(id).nullable(), operation, conflictPolicy: conflict, reexportMissing: z.boolean(), numberPrefix: z.boolean().optional() }).strict()
         ]),
         fn: (pid: string, opts: Parameters<AppService['previewExport']>[1]) => getSvc().previewExport(pid, opts)
       },
@@ -494,6 +495,35 @@ export function registerIpc(getSvc: () => AppService, win: WindowHooks): void {
       similarGroups: { args: z.tuple([id]), fn: (pid: string) => listSimilarGroups(getSvc().ctx, pid) }
     }
   }
+
+  // Drag & Drop aus dem Explorer (nur über die Preload-Schicht erreichbar)
+  const dropSchema = z.tuple([id, z.array(z.string().min(3).max(4096)).min(1).max(50)])
+  ipcMain.handle(DROP_CHANNEL, async (event, ...args): Promise<Result<unknown>> => {
+    if (!(event.senderFrame?.url ?? '').startsWith('file://') && !(process.env.ELECTRON_RENDERER_URL && !app.isPackaged)) return { ok: false, error: 'Unzulässiger Absender' }
+    const parsed = dropSchema.safeParse(args)
+    if (!parsed.success) return { ok: false, error: 'Ungültige Eingabe' }
+    const [pid, paths] = parsed.data
+    const svc = getSvc()
+    const results: AddSourceResult[] = []
+    for (const raw of paths) {
+      const dir = path.resolve(raw)
+      const st = await fs.promises.stat(dir).catch(() => null)
+      if (!st?.isDirectory()) {
+        results.push({ status: 'error', error: `„${path.basename(dir)}“ ist kein Ordner. Bitte Ordner ziehen.`, path: dir })
+        continue
+      }
+      const chk = await checkSourcePath(svc.ctx, pid, dir)
+      if (!chk.ok) results.push({ status: 'error', error: chk.error ?? 'Ungültiger Ordner', path: dir })
+      else if (chk.exclusions.length) results.push({ status: 'needs-confirmation', confirmToken: remember(pid, dir, 'source'), path: dir, exclusions: chk.exclusions })
+      else {
+        const source = await addSource(svc.ctx, pid, dir)
+        void svc.scanSources(pid, [source.id])
+        results.push({ status: 'added', source })
+      }
+    }
+    svc.ctx.emit({ type: 'sources-changed', projectId: pid })
+    return { ok: true, value: results }
+  })
 
   for (const [group, methods] of Object.entries(API_METHODS)) {
     for (const m of methods) {

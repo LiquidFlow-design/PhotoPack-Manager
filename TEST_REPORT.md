@@ -1,6 +1,6 @@
 # Testbericht
 
-**Stand:** 19.11.2026 (nach Audit, siehe AUDIT.md) · Version 1.0.0-beta.1 + Version-2-Funktionen
+**Stand:** 19.11.2026 (Version 3: Node 26, Electron 45, Design, Proton Drive, Audit-Vorschläge) · Version 1.0.0-beta.1 + Version-2-Funktionen
 **Umgebung der Testläufe:** Linux x64 (Ubuntu 24.04, Container), Node.js 22.23, Electron 44.11,
 Chromium-Rendering unter Xvfb (Software-Rendering, keine GPU). **Nicht** auf einem echten Windows-System
 ausgeführt – siehe „Nicht geprüft“.
@@ -12,9 +12,9 @@ generierte Dateien in temporären Ordnern.
 
 | Suite | Befehl | Ergebnis |
 |---|---|---|
-| Unit + Integration (Vitest) | `npm test` | **109 / 109 bestanden** (12 Dateien) |
-| Electron-E2E (Playwright) | `npm run test:e2e` | **19 / 19 bestanden** (Kern 10, Version 2 7, Barrierefreiheit 1, UI-Leistung 1) |
-| E2E gegen **gepacktes** Programm | `PPM_E2E_EXE=release/linux-unpacked/photopack-manager npx playwright test app features` | **17 / 17 bestanden** (asar, Worker, Decoder im Paketzustand; Build mit für Tests gelockerten Fuses, siehe DECISIONS G4) |
+| Unit + Integration (Vitest) | `npm test` | **114 / 114 bestanden** (13 Dateien) – mit Node.js 26.13.1 |
+| Electron-E2E (Playwright) | `npm run test:e2e` | **21 / 21 bestanden** (Kern 10, Version 2/3 9, Barrierefreiheit 1, UI-Leistung 1) – Electron 45.4.1 |
+| E2E gegen **gepacktes** Programm | `PPM_E2E_EXE=release/linux-unpacked/photopack-manager npx playwright test app features` | **19 / 19 bestanden** (asar, Worker, Decoder im Paketzustand; Build mit für Tests gelockerten Fuses, siehe DECISIONS G4) |
 | Barrierefreiheit (axe-core) | `npx playwright test a11y` | 22 Ansichten/Dialoge, hell + dunkel: **keine** schwerwiegenden/kritischen Verstöße |
 | Skalierung 12 000 Medien (Vitest) | `npm run test:perf` | **7 / 7 bestanden** |
 | Typprüfung | `npm run typecheck` | fehlerfrei (Main, Renderer, E2E) |
@@ -43,6 +43,18 @@ generierte Dateien in temporären Ordnern.
 | RAW ohne Vorschau, Video ohne unterstützten Codec, beschädigte Dateien | `media-tools.test.ts` (RAW ohne eingebettete Vorschau, defektes JPEG, MKV/MPEG-4, hängender Decoder) | ✓ |
 | Recovery-Wiederherstellung, 30-Tage-Ablauf, sichere Bereinigung | `recovery.test.ts` (8 Tests: Original-/Alternativpfad, Konflikt, gehaltene nie bereinigt, Ablauf 29/31 Tage, Mindestfrist, Protokoll) | ✓ |
 | 10k+ synthetische Medien, UI-Reaktionsfähigkeit, Cache-Verhalten | `tests/perf/scale.test.ts`, `tests/e2e/perf.spec.ts`; Cache-Invalidierung in `media-tools.test.ts` | ✓ |
+
+**Version 3 (`tests/integration/cloud.test.ts`, `features-v2.test.ts`, `tests/e2e/features.spec.ts`)**
+
+| Funktion | Test(s) | Status |
+|---|---|---|
+| Proton Drive: Registrierungsauswertung, Standardordner-Rückfall, Zuordnung von Pfaden | `cloud.test.ts` (2) | ✓ (Windows-Ausgaben simuliert) |
+| Proton-Drive-Quelle: „Nur online“ markiert, keine automatische Vorschau, Duplikatprüfung lässt aus, Hinweise in der Exportvorschau | `cloud.test.ts` | ✓ (Dateiattribute simuliert) |
+| Verschieben aus Proton Drive per verifizierter Kopie | `cloud.test.ts` | ✓ |
+| Nummernpräfix inkl. Sidecar | `features-v2.test.ts` | ✓ |
+| Kontextmenü (Maus, Umschalt+F10, Esc, Pakete, Sterne) | E2E | ✓ |
+| Ablegen aus dem Explorer: künstliche Dateien ohne Pfad abgewiesen, Overlay | E2E | ✓ (echtes Ziehen aus dem Explorer nur manuell prüfbar) |
+| Taskleisten-Fortschritt, Benachrichtigungen, portabler Modus | – | **nicht automatisiert** (Windows-spezifisch, siehe AUDIT-Prüfliste) |
 
 **Version 2 (`tests/integration/features-v2.test.ts`, `tests/e2e/features.spec.ts`)**
 

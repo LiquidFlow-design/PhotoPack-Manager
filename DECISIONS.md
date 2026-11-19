@@ -99,3 +99,19 @@ Einstellungsbeschreibungen. Warnungen und Fehler bleiben sichtbar.
 | G4 | Electron-Fuses im Paket (RunAsNode, NODE_OPTIONS, Inspect aus; nur asar mit Integritätsprüfung) | Schutz gegen Missbrauch der signierten EXE. Folge: Das *gepackte* Programm lässt sich nicht mehr per Playwright fernsteuern; E2E gegen das Paket: `npx electron-builder --linux dir -c.electronFuses.enableNodeCliInspectArguments=true -c.electronFuses.runAsNode=true` (nur für Tests; 17/17 bestanden). |
 | G5 | Einklapp-Reihenfolge: Quellenleiste vor Paketleiste | Pakete werden beim Sichten ständig gebraucht. |
 | G6 | Fensterlage wird gespeichert | Windows-übliches Verhalten. |
+
+## H. Version 3 (19.11.2026): Toolchain, Design, Proton Drive, Audit-Vorschläge
+
+| # | Entscheidung | Begründung / Einschränkung |
+|---|---|---|
+| H1 | **Node.js 26.13.1 LTS**, Electron 45.4.1, TypeScript 7.0, alle Pakete auf neuestem Stand; `engines` + `.nvmrc` + `engine-strict` | Wunsch „nur aktuellste Pakete“. Electron 45 enthält intern **Node 24** – das ist die von Electron ausgelieferte Laufzeit und erst mit einer neueren Electron-Hauptversion änderbar. |
+| H2 | npm-11-`allowScripts`: nur `ffmpeg-static` erlaubt; `better-sqlite3` (bringt fertige Binärdateien mit) und `electron-winstaller` (nicht genutzt) verweigert | Weniger fremder Code bei der Installation. |
+| H3 | **Neues Design**: dunkles Dashboard mit violettem Akzent (#6d4dff), flache Karten statt Glas (Glas nur noch bei Popover/Dialog), Suche/Glocke/Projekt-Avatar in der Kopfleiste, Medientyp-Reiter, Paket-Pillen auf Karten | Nach Designvorlage. Hell/System bleiben (Vorgabe des Auftrags) in gleicher Formensprache. Alle Text-Farbpaare ≥ 4,5 : 1. Ein einzelner Medientyp wird als Reiter gezeigt, nicht zusätzlich als Filter-Chip. |
+| H4 | **Proton Drive**: Erkennung über die Windows-Registrierung (`SyncRootManager`, gilt für alle Cloud-Files-Anbieter) mit Rückfall auf `%USERPROFILE%\Proton Drive\<Konto>`; Auswahl über Ordnermenüs (Dialog startet im Proton-Drive-Ordner) | Der Renderer übergibt nur die ID des erkannten Ordners, keine Pfade. |
+| H5 | „Nur online“-Erkennung per Dateiattribut (RECALL_ON_DATA_ACCESS/RECALL_ON_OPEN/OFFLINE) über PowerShell 5.1-kompatibles Skript, nur Metadaten | Lesen würde den Download auslösen. Vorschau nur auf Klick, Duplikat-/Ähnlichkeitsprüfung lässt solche Dateien aus. |
+| H6 | Verschieben aus Cloud-Ordnern **immer per verifizierter Kopie + Löschen**, nie per Umbenennen | Umbenennen von Cloud-Platzhaltern aus dem Sync-Ordner heraus ist anbieterabhängig; Kopieren ist sicher. |
+| H7 | Kontextmenü als eigenes (gestaltetes, zugängliches) Menü statt nativem Windows-Menü | Tri-State der Pakete, Sterne und Farben lassen sich nativ nicht darstellen. |
+| H8 | Ordner-Ablage aus dem Explorer: Pfade ermittelt nur die Preload-Schicht aus echten Dateiobjekten (`webUtils.getPathForFile`) | Die Seite kann keine Pfade vortäuschen (künstliche Dateien haben keinen Pfad – getestet). |
+| H9 | Benachrichtigungen nur für Sammelexporte/Wiederherstellungen und bei Fehlern, nur wenn das Fenster nicht im Vordergrund ist; Taskleiste: Fortschritt aller offenen Aufträge, gelb = pausiert, rot = Fehler | Sofortmodus würde sonst je Zuordnung melden. |
+| H10 | Portabler Modus: Daten in `PhotoPack-Daten` neben der EXE (portable EXE automatisch, ZIP-Version wenn der Ordner existiert); schreibgeschützt → `%APPDATA%` mit Hinweis | |
+| H11 | Nummernpräfix (`001_`) als Projekteinstellung, gilt für Sammel- und Sofortexport; Position = Rang im Paket über alle Hauptmedien, Sidecars übernehmen den Präfix | Stabil, auch wenn nur ein Teil exportiert wird. Bereits exportierte Dateien werden nicht umbenannt. |

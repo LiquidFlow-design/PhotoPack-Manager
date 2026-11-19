@@ -96,6 +96,16 @@ Bitte auf einem echten PC durchgehen (je ✓/✗ notieren). Ich werte die Ergebn
 - [ ] Windows während eines Exports abmelden → nach Anmeldung: Auftrag pausiert, Fortsetzen ohne Doppel-Dateien.
 - [ ] Ziel mit sehr langem Pfad (> 260 Zeichen) funktioniert.
 
+**Proton Drive & neue Funktionen**
+- [ ] Proton-Drive-Ordner erscheint in „Quellordner hinzufügen“ und „Ausgabeordner wählen“.
+- [ ] „Nur online“-Dateien zeigen das Wolken-Symbol; Vorschau erst nach Klick; Export lädt sie herunter.
+- [ ] Verschieben aus Proton Drive: Exportvorschau warnt; Datei verschwindet in Proton Drive (Web), Original im Wiederherstellungsbereich.
+- [ ] Export nach Proton Drive: Dateien werden hochgeladen; keine `.ppm-*.tmp` werden hochgeladen bzw. bleiben zurück.
+- [ ] Ordner aus dem Explorer ins Fenster ziehen → Quelle wird hinzugefügt.
+- [ ] Taskleisten-Fortschritt während Export; Benachrichtigung bei Ende, wenn das Fenster im Hintergrund ist.
+- [ ] Portable EXE legt `PhotoPack-Daten` neben sich an; ZIP-Version nur, wenn der Ordner existiert.
+- [ ] Rechtsklick und Menütaste öffnen das Kontextmenü.
+
 **Bedienung**
 - [ ] 1366×768 bei 125 % und Full HD bei 150 %: alle Knöpfe erreichbar, Export-Knopf sichtbar.
 - [ ] Tasten 1–9, Alt+1–5 (Sterne), Alt+6–9 (Farben), Strg+Z/Y mit deutscher Tastatur; AltGr+7 („{“) in der Suche tippt nur Zeichen.
@@ -107,7 +117,7 @@ Bitte auf einem echten PC durchgehen (je ✓/✗ notieren). Ich werte die Ergebn
 - [ ] HEIC-Datei vom iPhone: Vorschau mit installierter „HEIF-Bilderweiterung“.
 - [ ] MP4 (H.264), MOV, MKV, HEVC-Video: Wiedergabe oder klare Meldung, Export funktioniert.
 
-## 5. Vorschläge (nicht umgesetzt – Freigabe erforderlich)
+## 5. Vorschläge – **umgesetzt am 19.11.2026** (siehe DECISIONS.md H7–H11)
 
 | # | Vorschlag | Nutzen |
 |---|---|---|

@@ -232,5 +232,8 @@ ALTER TABLE jobs ADD COLUMN start_after INTEGER;
   /* 4: Cloud-Speicher (Proton Drive, OneDrive …): Anbieter je Quelle, „Nur online“-Status je Medium */ `
 ALTER TABLE sources ADD COLUMN cloud_provider TEXT;
 ALTER TABLE media ADD COLUMN cloud_state TEXT NOT NULL DEFAULT 'local' CHECK (cloud_state IN ('local','online'));
+`,
+  /* 5: Paketreihenfolge als Nummer im Dateinamen */ `
+ALTER TABLE projects ADD COLUMN number_prefix INTEGER NOT NULL DEFAULT 0;
 `
 ]

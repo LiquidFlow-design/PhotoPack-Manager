@@ -123,7 +123,8 @@ Ergebnisse des letzten Laufs: [TEST_REPORT.md](TEST_REPORT.md).
 ## Release erstellen (GitHub Actions)
 
 1. Version in `package.json` erhöhen, `CHANGELOG.md` und `docs/release-notes/v<version>.md` ergänzen.
-2. Tag `v<version>` pushen. Der Workflow **Release** testet auf Windows und Linux, baut auf einem Windows-Runner
+2. Tag `v<version>` pushen – **oder** unter *Actions → Release → Run workflow* auf `main` starten und den Tag
+   eintragen; der Tag wird dann auf dem getesteten Commit angelegt. Der Workflow **Release** testet auf Windows und Linux, baut auf einem Windows-Runner
    Installer, portable EXE und ZIP (inkl. LGPL-FFmpeg) und legt den GitHub-Release mit Prüfsummen an
    (Versionen mit Bindestrich, z. B. `-beta.1`, als Vorabversion).
 3. Signierung: Secrets `CSC_LINK` (Base64-PFX) und `CSC_KEY_PASSWORD` im Repository hinterlegen.

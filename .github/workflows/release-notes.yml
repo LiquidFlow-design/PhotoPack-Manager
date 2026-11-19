@@ -1,0 +1,33 @@
+# Release-Notizen eines bestehenden Releases aus docs/release-notes/<tag>.md (Stand main) aktualisieren,
+# ohne neu zu bauen. Start: Actions → Release-Notizen aktualisieren → Run workflow.
+name: Release-Notizen aktualisieren
+
+on:
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: 'Tag des bestehenden Releases (z. B. v1.0.0-beta.1)'
+        required: true
+
+permissions:
+  contents: read
+
+jobs:
+  notes:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    permissions:
+      contents: write
+    env:
+      TAG: ${{ github.event.inputs.tag }}
+      GH_TOKEN: ${{ github.token }}
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - name: Notizen übernehmen
+        run: |
+          set -euo pipefail
+          [[ "$TAG" =~ ^v[0-9]+\.[0-9]+\.[0-9]+(-[0-9A-Za-z.]+)?$ ]] || { echo "Ungültiger Tag: $TAG"; exit 1; }
+          notes="docs/release-notes/${TAG}.md"
+          [ -f "$notes" ] || { echo "Datei fehlt: $notes"; exit 1; }
+          gh release view "$TAG" --repo "$GITHUB_REPOSITORY" --json tagName >/dev/null
+          gh release edit "$TAG" --repo "$GITHUB_REPOSITORY" --notes-file "$notes"

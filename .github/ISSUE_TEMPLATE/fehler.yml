@@ -1,0 +1,51 @@
+name: Fehler melden
+description: Etwas funktioniert nicht wie erwartet
+labels: [fehler]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Bitte **keine privaten Fotos oder Pfade mit Namen** anhängen. Bei Datenverlust-Verdacht: App nicht weiter benutzen und den Ordner „Programmdaten“ (Einstellungen → System) sichern.
+  - type: input
+    id: version
+    attributes:
+      label: Version
+      description: Einstellungen → System → Version
+      placeholder: 1.0.0-beta.1
+    validations:
+      required: true
+  - type: dropdown
+    id: variante
+    attributes:
+      label: Variante
+      options: [Installer, Portable EXE, ZIP]
+    validations:
+      required: true
+  - type: input
+    id: windows
+    attributes:
+      label: Windows-Version
+      placeholder: Windows 11 24H2
+  - type: dropdown
+    id: speicher
+    attributes:
+      label: Betroffener Speicherort
+      multiple: true
+      options: [Interne Festplatte (NTFS), USB-Festplatte, SD-Karte / USB-Stick (FAT/exFAT), Netzlaufwerk, Proton Drive, OneDrive, Sonstiges]
+  - type: textarea
+    id: schritte
+    attributes:
+      label: Schritte zum Nachstellen
+      placeholder: "1. …\n2. …\n3. …"
+    validations:
+      required: true
+  - type: textarea
+    id: erwartet
+    attributes:
+      label: Erwartet / tatsächlich
+    validations:
+      required: true
+  - type: textarea
+    id: auftrag
+    attributes:
+      label: Fehlermeldung im Auftragsverlauf (falls vorhanden)

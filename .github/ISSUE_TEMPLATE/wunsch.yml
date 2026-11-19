@@ -1,0 +1,14 @@
+name: Verbesserung vorschlagen
+description: Idee für eine neue Funktion oder bessere Bedienung
+labels: [wunsch]
+body:
+  - type: textarea
+    id: problem
+    attributes:
+      label: Was möchtest du erreichen?
+    validations:
+      required: true
+  - type: textarea
+    id: vorschlag
+    attributes:
+      label: Vorschlag

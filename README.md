@@ -1,5 +1,10 @@
 # PhotoPack Manager
 
+[![CI](https://github.com/LiquidFlow-design/PhotoPack-Manager/actions/workflows/ci.yml/badge.svg)](https://github.com/LiquidFlow-design/PhotoPack-Manager/actions/workflows/ci.yml)
+[![Release](https://img.shields.io/github/v/release/LiquidFlow-design/PhotoPack-Manager?include_prereleases&label=Release)](https://github.com/LiquidFlow-design/PhotoPack-Manager/releases)
+
+**Download:** [Releases](https://github.com/LiquidFlow-design/PhotoPack-Manager/releases) · **Feedback:** [Issues](https://github.com/LiquidFlow-design/PhotoPack-Manager/issues/new/choose)
+
 Lokale Windows-Desktopanwendung zum schnellen, sicheren Verteilen großer Foto-, RAW- und Videosammlungen
 auf mehrere Personen bzw. **Pakete** – vollständig offline, ohne Konto, Cloud oder Server.
 
@@ -27,9 +32,10 @@ Screenshots: [`docs/screenshots/`](docs/screenshots/).
 
 | Datei | Beschreibung |
 |---|---|
-| `PhotoPack Manager-<version>-portable.exe` | Portable Version, ohne Installation startbar |
-| `PhotoPack Manager-<version>-win-x64.zip` | Entpacken und `PhotoPack Manager.exe` starten |
-| `PhotoPack Manager-<version>-win-x64.exe` | Installer (NSIS) – wird auf Windows gebaut, siehe unten |
+| `PhotoPack-Manager-<version>-Setup.exe` | Installer (Benutzerinstallation) |
+| `PhotoPack-Manager-<version>-portable.exe` | Portable Version, ohne Installation startbar |
+| `PhotoPack-Manager-<version>-win-x64.zip` | Entpacken und `PhotoPack Manager.exe` starten |
+| `SHA256SUMS.txt` | Prüfsummen |
 
 **SmartScreen:** Unsignierte Builds lösen beim ersten Start die Warnung „Der Computer wurde durch Windows
 geschützt“ aus („Weitere Informationen“ → „Trotzdem ausführen“). Für die Verteilung an Dritte wird eine
@@ -114,7 +120,18 @@ temporären Ordnern (`.tmp-tests/`, Systemtemp). Testmedien manuell erzeugen:
 
 Ergebnisse des letzten Laufs: [TEST_REPORT.md](TEST_REPORT.md).
 
-## Windows-Build
+## Release erstellen (GitHub Actions)
+
+1. Version in `package.json` erhöhen, `CHANGELOG.md` und `docs/release-notes/v<version>.md` ergänzen.
+2. Tag `v<version>` pushen. Der Workflow **Release** testet auf Windows und Linux, baut auf einem Windows-Runner
+   Installer, portable EXE und ZIP (inkl. LGPL-FFmpeg) und legt den GitHub-Release mit Prüfsummen an
+   (Versionen mit Bindestrich, z. B. `-beta.1`, als Vorabversion).
+3. Signierung: Secrets `CSC_LINK` (Base64-PFX) und `CSC_KEY_PASSWORD` im Repository hinterlegen.
+
+Der Workflow **CI** prüft jeden Push und Pull Request auf Windows und Linux. Dependabot schlägt wöchentlich
+Aktualisierungen von npm-Paketen und GitHub-Actions vor.
+
+## Windows-Build (lokal)
 
 **Auf Windows (empfohlen, inkl. Installer):**
 

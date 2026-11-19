@@ -51,16 +51,16 @@ win:
   # Icon/Versionsinfo per rcedit setzen (unter Linux/macOS via Wine). Signiert wird nur, wenn ein
   # Zertifikat konfiguriert ist (CSC_LINK / CSC_KEY_PASSWORD bzw. win.azureSignOptions) – siehe README.
   signAndEditExecutable: true
-  artifactName: '${productName}-${version}-win-x64.${ext}'
+  artifactName: 'PhotoPack-Manager-${version}-win-x64.${ext}'
 nsis:
   oneClick: false
   perMachine: false
   allowToChangeInstallationDirectory: true
   createDesktopShortcut: true
   shortcutName: PhotoPack Manager
-  artifactName: '${productName}-${version}-Setup.${ext}'
+  artifactName: 'PhotoPack-Manager-${version}-Setup.${ext}'
 portable:
-  artifactName: '${productName}-${version}-portable.${ext}'
+  artifactName: 'PhotoPack-Manager-${version}-portable.${ext}'
 linux:
   target: [dir]
   extraResources:

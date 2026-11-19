@@ -1,0 +1,55 @@
+# Prüfung bei jedem Push/PR: Typprüfung, Unit-/Integrationstests, Build und Electron-E2E auf Windows und Linux.
+name: CI
+
+on:
+  push:
+    branches: ['**']
+  pull_request:
+  workflow_dispatch:
+  workflow_call:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ci-${{ github.ref }}-${{ github.event_name }}
+  cancel-in-progress: true
+
+jobs:
+  test:
+    name: Tests (${{ matrix.os }})
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [windows-latest, ubuntu-latest]
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 45
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
+        with:
+          node-version-file: .nvmrc
+          cache: npm
+      - name: Abhängigkeiten installieren
+        run: npm ci
+      - name: Electron-Laufzeit laden
+        run: node node_modules/electron/install.js
+      - name: Typprüfung
+        run: npm run typecheck
+      - name: Unit- und Integrationstests
+        run: npm test
+      - name: Build
+        run: npm run build
+      - name: Electron-E2E (Windows)
+        if: runner.os == 'Windows'
+        run: npx playwright test app features a11y --trace off
+      - name: Electron-E2E (Linux, Xvfb)
+        if: runner.os == 'Linux'
+        run: xvfb-run -a npx playwright test app features a11y --trace off
+      - name: Testergebnisse bei Fehler sichern
+        if: failure()
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: test-results-${{ matrix.os }}
+          path: test-results/
+          retention-days: 14

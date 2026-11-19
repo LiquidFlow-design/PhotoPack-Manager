@@ -1,9 +1,10 @@
 # Testbericht
 
 **Stand:** 19.11.2026 (Version 3: Node 26, Electron 45, Design, Proton Drive, Audit-Vorschläge) · Version 1.0.0-beta.1 + Version-2-Funktionen
-**Umgebung der Testläufe:** Linux x64 (Ubuntu 24.04, Container), Node.js 22.23, Electron 44.11,
-Chromium-Rendering unter Xvfb (Software-Rendering, keine GPU). **Nicht** auf einem echten Windows-System
-ausgeführt – siehe „Nicht geprüft“.
+**Umgebung der Testläufe:** Linux x64 (Ubuntu 24.04, Container), Node.js 26.13.1, Electron 45.4.1,
+Chromium-Rendering unter Xvfb (Software-Rendering, keine GPU). Zusätzlich GitHub Actions auf
+**Windows (`windows-latest`)** und Ubuntu: Typprüfung, Unit-Tests, Build und Electron-E2E – siehe Zeile „CI“.
+Manuelle Bedienung auf einem Windows-Desktop: siehe „Nicht geprüft“.
 
 Alle Angaben unten stammen aus tatsächlich ausgeführten Läufen. Destruktive Tests verwenden ausschließlich
 generierte Dateien in temporären Ordnern.
@@ -19,6 +20,7 @@ generierte Dateien in temporären Ordnern.
 | Skalierung 12 000 Medien (Vitest) | `npm run test:perf` | **7 / 7 bestanden** |
 | Typprüfung | `npm run typecheck` | fehlerfrei (Main, Renderer, E2E) |
 | Gepackte App (Linux-Variante desselben asar-Layouts) | `node scripts/smoke.mjs … release/linux-unpacked/photopack-manager` | Start, Indexierung, Vorschauen (Bild/Video), Decoder-Status ok |
+| **CI auf echtem Windows** (GitHub Actions, `windows-latest`) | `.github/workflows/ci.yml` | Typprüfung, 114 Unit-/Integrationstests, Build und **20 / 20 Electron-E2E** (Kern, Version 2/3, Barrierefreiheit) **bestanden**; ebenso auf `ubuntu-latest`. Der erste Windows-Lauf fand einen Wettlauf beim Wechsel des Schnellzuordnungsmodus (Einstellung erst nach IPC-Rundweg aktiv) – behoben, siehe AUDIT. |
 | Windows-Build | `electron-builder --win portable zip --x64` | Stand Version 1: portable EXE + ZIP erzeugt; NSIS nicht (Wine-Absturz). **Version 2 nicht neu gebaut**: Der Download des LGPL-FFmpeg wurde in dieser Umgebung durch die Zugriffsrichtlinie blockiert. |
 
 ## 2. Abdeckung der Pflicht-Testfälle (Auftrag §9)
@@ -145,7 +147,7 @@ Zeitlimits für alle Decoder-Aufrufe und Entkopplung von Metadaten und Vorschau 
 
 ## 5. Nicht geprüft / bekannte Einschränkungen
 
-* **Kein Test auf echtem Windows 10/11**: NTFS-Sperrverhalten, Virenscanner, Netzlaufwerke (SMB), externe
+* **Auf Windows nur automatisiert geprüft** (CI-Runner, siehe oben), keine manuelle Bedienung: NTFS-Sperrverhalten, Virenscanner, Netzlaufwerke (SMB), externe
   Laufwerke beim Abziehen, Pfade > 260 Zeichen, Windows-Hell/Dunkel-Umschaltung, SmartScreen, Installer.
   Gesperrte Dateien und volle Datenträger sind nur simuliert (Fehlercodes `EBUSY`/`ENOSPC`).
 * **Echte Kamera-RAW-Dateien** wurden nicht getestet (keine Nutzerdaten, keine frei verwendbaren Muster im

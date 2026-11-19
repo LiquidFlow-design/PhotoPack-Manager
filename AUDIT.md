@@ -39,6 +39,7 @@ Beeinträchtigung, **N** = gering.
 | A17 | Sicherheit | M | Electron-Fuses nicht gesetzt: signierte EXE ließe sich per `ELECTRON_RUN_AS_NODE` als Node-Laufzeit missbrauchen. | Fuses: RunAsNode aus, NODE_OPTIONS/Inspect aus, nur asar mit Integritätsprüfung, Cookie-Verschlüsselung. | gepackt: startet normal, Node-Modus wirkungslos |
 | A18 | Sicherheit | N | IPC akzeptierte im fertigen Programm auch `http://localhost`-Absender. | Nur im Entwicklungsmodus. | Code |
 | A19 | Windows | N | Ohne Installer fehlte die AppUserModelId (Taskleisten-Gruppierung der portablen Version). | Gesetzt. | Code |
+| A20 | Bedienung · langsame Rechner | N | Gefunden im ersten CI-Lauf auf Windows: Eine Paket-Taste direkt nach dem Wechsel des Schnellzuordnungsmodus nutzte noch den alten Modus, weil Einstellungen erst nach dem IPC-Rundweg übernommen wurden. | Einstellungen werden sofort übernommen, bei Speicherfehler zurückgesetzt und gemeldet. | E2E „Schnellzuordnung …“ auf `windows-latest` |
 
 ## 2. Geprüft ohne Befund
 

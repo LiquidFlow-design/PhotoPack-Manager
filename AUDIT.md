@@ -54,7 +54,7 @@ Beeinträchtigung, **N** = gering.
 * **Freier Speicher** über `statfs` (unter Windows `GetDiskFreeSpaceEx`), Fehler → Prüfung entfällt, Laufzeitfehler `ENOSPC` bleibt abgefangen.
 * **Tastatur unter deutscher Belegung:** AltGr (= Strg+Alt) löst keine Alt-Kürzel aus; Paketkürzel nur ohne
   Texteingabe; Menüleiste ist entfernt, damit Alt-Kürzel funktionieren.
-* **Gepacktes Programm:** komplette E2E-Suite (16 Tests) gegen das gepackte Programm bestanden; Worker-Threads
+* **Gepacktes Programm:** komplette E2E-Suite (17 Tests) gegen das gepackte Programm bestanden; Worker-Threads
   laden aus dem asar-Archiv.
 * **Abhängigkeiten:** `npm audit --omit=dev`: 0 Befunde. Im Build-Werkzeug (electron-builder → minimatch)
   eine moderate Meldung, wird nicht ausgeliefert.

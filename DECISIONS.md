@@ -96,6 +96,6 @@ Einstellungsbeschreibungen. Warnungen und Fehler bleiben sichtbar.
 | G1 | Datenbank `synchronous=NORMAL`, aber Zustände **vor nicht umkehrbaren Dateischritten** mit `durable()` (FULL) | Volle Synchronisation jeder Transaktion halbierte den Durchsatz kleiner Dateien; alle übrigen Schritte sind nach Stromausfall durch den Abgleich wiederholbar (identische Ziele werden erkannt). |
 | G2 | Recovery je Laufwerk nur für Laufwerkstyp „Fixed“ | Speicherkarten müssen beim Verschieben frei werden; Sicherung darf nicht auf dem Medium liegen, das danach formatiert wird. |
 | G3 | Re-Import-Schutz projektübergreifend | Auch Exporte anderer Projekte sind keine neuen Quellmedien. |
-| G4 | Electron-Fuses im Paket (RunAsNode, NODE_OPTIONS, Inspect aus; nur asar mit Integritätsprüfung) | Schutz gegen Missbrauch der signierten EXE. Folge: Das *gepackte* Programm lässt sich nicht mehr per Playwright fernsteuern; E2E gegen das Paket erfolgt mit einem Build ohne Fuses (`-c.electronFuses=null`). |
+| G4 | Electron-Fuses im Paket (RunAsNode, NODE_OPTIONS, Inspect aus; nur asar mit Integritätsprüfung) | Schutz gegen Missbrauch der signierten EXE. Folge: Das *gepackte* Programm lässt sich nicht mehr per Playwright fernsteuern; E2E gegen das Paket: `npx electron-builder --linux dir -c.electronFuses.enableNodeCliInspectArguments=true -c.electronFuses.runAsNode=true` (nur für Tests; 17/17 bestanden). |
 | G5 | Einklapp-Reihenfolge: Quellenleiste vor Paketleiste | Pakete werden beim Sichten ständig gebraucht. |
 | G6 | Fensterlage wird gespeichert | Windows-übliches Verhalten. |

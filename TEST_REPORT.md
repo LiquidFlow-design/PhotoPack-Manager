@@ -14,7 +14,7 @@ generierte Dateien in temporären Ordnern.
 |---|---|---|
 | Unit + Integration (Vitest) | `npm test` | **109 / 109 bestanden** (12 Dateien) |
 | Electron-E2E (Playwright) | `npm run test:e2e` | **19 / 19 bestanden** (Kern 10, Version 2 7, Barrierefreiheit 1, UI-Leistung 1) |
-| E2E gegen **gepacktes** Programm | `PPM_E2E_EXE=release/linux-unpacked/photopack-manager npx playwright test app features` | **16 / 16 bestanden** (asar, Worker, Decoder im Paketzustand) |
+| E2E gegen **gepacktes** Programm | `PPM_E2E_EXE=release/linux-unpacked/photopack-manager npx playwright test app features` | **17 / 17 bestanden** (asar, Worker, Decoder im Paketzustand; Build mit für Tests gelockerten Fuses, siehe DECISIONS G4) |
 | Barrierefreiheit (axe-core) | `npx playwright test a11y` | 22 Ansichten/Dialoge, hell + dunkel: **keine** schwerwiegenden/kritischen Verstöße |
 | Skalierung 12 000 Medien (Vitest) | `npm run test:perf` | **7 / 7 bestanden** |
 | Typprüfung | `npm run typecheck` | fehlerfrei (Main, Renderer, E2E) |

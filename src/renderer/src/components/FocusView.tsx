@@ -1,4 +1,4 @@
-import { ChevronLeft, ChevronRight, FileWarning, FolderSearch, Minus, Plus, Scan, Star, Video } from 'lucide-react'
+import { ChevronLeft, ChevronRight, Cloud, FileWarning, FolderSearch, Minus, Plus, Scan, Star, Video } from 'lucide-react'
 import { COLOR_HEX, COLOR_LABEL } from '@shared/filters'
 import type { ColorLabel } from '@shared/types'
 import { useEffect, useRef, useState } from 'react'
@@ -17,6 +17,8 @@ export function FocusView() {
   const packages = useStore((s) => s.packages)
   const v = useStore((s) => (s.active != null ? (s.thumbVersion.get(s.active) ?? 0) : 0))
   const [detail, setDetail] = useState<MediaDetail | null>(null)
+  const [cloudLoad, setCloudLoad] = useState<number | null>(null)
+  const provider = useStore((s) => (m?.sourceId ? s.sources.find((x) => x.id === m.sourceId)?.cloudProvider : null))
   const idx = active != null ? (visibleIndex.get(active) ?? -1) : -1
 
   useEffect(() => {
@@ -47,10 +49,20 @@ export function FocusView() {
               <FileWarning size={34} /> Die Quelldatei ist nicht mehr vorhanden.
             </div>
           </div>
+        ) : m.cloudOnline && cloudLoad !== m.id ? (
+          <div className="stage" style={{ cursor: 'default' }}>
+            <div className="empty">
+              <Cloud size={34} />
+              <div>Diese Datei liegt nur online{provider ? ` in ${provider}` : ''}.</div>
+              <button className="btn primary" onClick={() => setCloudLoad(m.id)}>
+                Laden und anzeigen
+              </button>
+            </div>
+          </div>
         ) : m.kind === 'video' ? (
-          <VideoStage key={m.id} id={m.id} />
+          <VideoStage key={m.id} id={m.id} load={m.cloudOnline} />
         ) : (
-          <ImageStage key={m.id} id={m.id} v={v} />
+          <ImageStage key={m.id} id={m.id} v={v} load={m.cloudOnline} />
         )}
         <button className="icon-btn stage-nav left glass" aria-label="Vorheriges Medium" disabled={idx <= 0} onClick={() => nav(-1)}>
           <ChevronLeft size={18} />
@@ -122,7 +134,7 @@ export function FocusView() {
   )
 }
 
-function ImageStage({ id, v }: { id: number; v: number }) {
+function ImageStage({ id, v, load = false }: { id: number; v: number; load?: boolean }) {
   const ref = useRef<HTMLDivElement>(null)
   const imgRef = useRef<HTMLImageElement>(null)
   const [nat, setNat] = useState<{ w: number; h: number } | null>(null)
@@ -216,7 +228,7 @@ function ImageStage({ id, v }: { id: number; v: number }) {
       <img
         ref={imgRef}
         className="zoomable"
-        src={previewUrl(id, v)}
+        src={previewUrl(id, v, load)}
         alt=""
         draggable={false}
         onLoad={(e) => setNat({ w: e.currentTarget.naturalWidth, h: e.currentTarget.naturalHeight })}
@@ -252,7 +264,7 @@ function ImageStage({ id, v }: { id: number; v: number }) {
   )
 }
 
-function VideoStage({ id }: { id: number }) {
+function VideoStage({ id, load = false }: { id: number; load?: boolean }) {
   const [err, setErr] = useState(false)
   if (err)
     return (
@@ -267,7 +279,7 @@ function VideoStage({ id }: { id: number }) {
   return (
     <div className="stage" style={{ cursor: 'default' }}>
       {/* Kein Autoplay; Steuerelemente: Wiedergabe, Zeitleiste, Lautstärke */}
-      <video src={mediaUrl(id)} controls preload="metadata" onError={() => setErr(true)} />
+      <video src={mediaUrl(id, load)} controls preload="metadata" onError={() => setErr(true)} />
     </div>
   )
 }

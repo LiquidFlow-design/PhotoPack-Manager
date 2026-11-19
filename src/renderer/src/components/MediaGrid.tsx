@@ -1,5 +1,5 @@
 import { useVirtualizer } from '@tanstack/react-virtual'
-import { Check, FileWarning, FolderPlus, ImageOff, Star, Undo2, Video } from 'lucide-react'
+import { Check, Cloud, FileWarning, FolderPlus, ImageOff, Star, Undo2, Video } from 'lucide-react'
 import { memo, useEffect, useLayoutEffect, useRef, useState } from 'react'
 import { BROWSER_NATIVE_IMAGE } from '@shared/media-kinds'
 import { activeFilterCount, COLOR_HEX } from '@shared/filters'
@@ -7,6 +7,7 @@ import type { MediaRow, PackageInfo } from '@shared/types'
 import { thumbUrl } from '../lib/api'
 import { fmtBytes, fmtDuration } from '../lib/format'
 import { addSourceFlow } from '../lib/flows'
+import { FolderMenu } from './FolderMenu'
 import { useStore } from '../state/store'
 
 const GAP = 12
@@ -127,9 +128,9 @@ export function MediaGrid() {
         <div className="empty">
           <ImageOff size={34} />
           <div>{sources.length ? 'In den Quellen wurden (noch) keine unterstützten Medien gefunden.' : 'Noch keine Quellordner hinzugefügt.'}</div>
-          <button className="btn primary" onClick={() => void addSourceFlow()}>
+          <FolderMenu className="btn primary" onPick={(id) => void addSourceFlow(id)}>
             <FolderPlus size={16} /> Quellordner hinzufügen
-          </button>
+          </FolderMenu>
         </div>
       </div>
     )
@@ -211,9 +212,12 @@ const Tile = memo(function Tile({
   dropSide: 'before' | 'after' | null
 }) {
   const [failed, setFailed] = useState(false)
-  useEffect(() => setFailed(false), [v])
+  const [load, setLoad] = useState(false)
+  useEffect(() => setFailed(false), [v, load])
   const canNative = m.kind === 'image' && BROWSER_NATIVE_IMAGE.has(m.ext)
-  const showImg = m.location !== 'missing' && !failed && (m.thumbStatus !== 'error' || canNative)
+  // „Nur online“: Vorschau nur auf Anforderung (sonst würde der ganze Cloud-Ordner heruntergeladen)
+  const cloudWait = m.cloudOnline && m.thumbStatus !== 'ok' && !load
+  const showImg = m.location !== 'missing' && !failed && !cloudWait && (m.thumbStatus !== 'error' || canNative)
   const kindTag = m.kind === 'raw' ? 'RAW' : m.kind === 'video' ? 'VIDEO' : m.ext.toUpperCase()
   const onClick = (e: React.MouseEvent) => {
     const s = useStore.getState()
@@ -236,7 +240,21 @@ const Tile = memo(function Tile({
     >
       <div className="thumb">
         {showImg ? (
-          <img src={thumbUrl(m.id, v)} alt="" loading="lazy" decoding="async" draggable={false} onError={() => setFailed(true)} />
+          <img src={thumbUrl(m.id, v, load)} alt="" loading="lazy" decoding="async" draggable={false} onError={() => setFailed(true)} />
+        ) : cloudWait ? (
+          <div className="placeholder">
+            <Cloud size={26} />
+            <span>Nur online</span>
+            <button
+              className="btn sm"
+              onClick={(e) => {
+                e.stopPropagation()
+                setLoad(true)
+              }}
+            >
+              Vorschau laden
+            </button>
+          </div>
         ) : (
           <div className="placeholder">
             {m.location === 'missing' ? <FileWarning size={26} /> : m.kind === 'video' ? <Video size={26} /> : <ImageOff size={26} />}
@@ -248,6 +266,11 @@ const Tile = memo(function Tile({
           {m.pairId ? (m.kind === 'raw' ? '+JPG' : '+RAW') : ''}
           {m.sidecars ? ' · XMP' : ''}
         </span>
+        {m.cloudOnline && (
+          <span className="tag br" title="Liegt nur online im Cloud-Speicher" style={m.kind === 'video' ? { bottom: 28 } : undefined}>
+            <Cloud size={10} />
+          </span>
+        )}
         {m.kind === 'video' && m.durationMs != null && <span className="tag br">{fmtDuration(m.durationMs)}</span>}
         {pos > 0 && m.location !== 'recovery' && m.location !== 'missing' && <span className="tag bl">{pos}</span>}
         {m.location === 'recovery' && (

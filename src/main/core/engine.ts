@@ -1010,7 +1010,12 @@ export class TransferEngine {
     const recId = newId()
     const t = this.ctx.now()
     const recDev = (await fs.promises.stat(recDir)).dev
-    const sameVolume = st.dev === recDev
+    // Quellen in Cloud-Ordnern (Proton Drive, OneDrive …) nie per Umbenennen verschieben: Platzhalter könnten
+    // Reparse-Daten mitnehmen; stattdessen verifizierte Kopie in den Wiederherstellungsbereich, dann Löschen.
+    const cloud = this.ctx.db.prepare('SELECT s.cloud_provider AS p FROM media m JOIN sources s ON s.id = m.source_id WHERE m.id = ?').get(media.id) as
+      | { p: string | null }
+      | undefined
+    const sameVolume = st.dev === recDev && !cloud?.p
 
     // Muss vor dem Verschieben der Quelle dauerhaft gespeichert sein (Abgleich nach Stromausfall)
     durable(db, () => {

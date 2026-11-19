@@ -53,6 +53,14 @@ export interface Source {
   fileCount: number
   skippedLinks: number
   excludedPaths: string[]
+  cloudProvider: string | null // z. B. „Proton Drive“
+}
+
+export interface CloudRootInfo {
+  id: string
+  provider: string
+  label: string
+  path: string
 }
 
 /** Kompakte Medienzeile für den Renderer (20k Einträge müssen günstig übertragbar sein). */
@@ -79,6 +87,7 @@ export interface MediaRow {
   rating: number // 0–5
   colorLabel: ColorLabel | null
   simGroup: number | null // Gruppe visuell ähnlicher Medien
+  cloudOnline: boolean // liegt nur online im Cloud-Speicher (Lesen lädt herunter)
 }
 
 export type ColorLabel = 'red' | 'yellow' | 'green' | 'blue' | 'purple'
@@ -142,7 +151,7 @@ export interface FilterState {
   dateFrom: string | null // YYYY-MM-DD
   dateTo: string | null
   exportState: ExportFilter
-  location: 'all' | 'moved' | 'missing'
+  location: 'all' | 'moved' | 'missing' | 'cloud'
   minRating: number // 0 = egal
   colorLabels: ColorLabel[]
   search: string

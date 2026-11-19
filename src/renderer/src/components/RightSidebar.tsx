@@ -4,6 +4,7 @@ import { triState } from '@shared/assignment'
 import type { PackageInfo, QuickAssignMode } from '@shared/types'
 import { api } from '../lib/api'
 import { chooseDirFlow } from '../lib/flows'
+import { FolderMenu } from './FolderMenu'
 import { useStore } from '../state/store'
 
 export function createPackageFlow(): void {
@@ -270,9 +271,11 @@ export function RightSidebar({ collapsed, auto }: { collapsed: boolean; auto: bo
             <span className="warn">Kein globaler Ausgabeordner festgelegt</span>
           )}
         </div>
-        <button className="btn block" style={{ marginTop: 8 }} onClick={() => void chooseDirFlow('output')}>
-          <FolderOutput size={15} /> Ausgabeordner wählen
-        </button>
+        <div style={{ marginTop: 8 }}>
+          <FolderMenu className="btn block" onPick={(id) => void chooseDirFlow('output', undefined, id)}>
+            <FolderOutput size={15} /> Ausgabeordner wählen
+          </FolderMenu>
+        </div>
       </div>
       {/* Immer sichtbar, auch auf kleinen Bildschirmen */}
       <div className="sidebar-foot">

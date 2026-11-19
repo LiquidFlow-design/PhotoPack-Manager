@@ -1787,3 +1787,71 @@ button:disabled {
     display: none;
   }
 }
+
+/* ---------- Menüs ---------- */
+.menu-wrap {
+  position: relative;
+}
+.menu {
+  position: absolute;
+  left: 0;
+  right: 0;
+  min-width: 220px;
+  top: calc(100% + 6px);
+  z-index: 50;
+  background: var(--glass-strong);
+  border: 1px solid var(--line);
+  border-radius: 12px;
+  box-shadow: var(--shadow);
+  padding: 6px;
+}
+.menu.fixed {
+  position: fixed;
+  right: auto;
+  top: auto;
+}
+.menu-item {
+  display: flex;
+  align-items: center;
+  gap: 9px;
+  width: 100%;
+  border: 0;
+  background: transparent;
+  border-radius: 8px;
+  padding: 8px 10px;
+  font-size: 12.5px;
+  text-align: left;
+  min-width: 0;
+}
+.menu-item:hover,
+.menu-item:focus-visible {
+  background: var(--hover);
+}
+.menu-item[aria-checked='true'] {
+  color: var(--accent);
+  font-weight: 650;
+}
+.menu-item.danger {
+  color: var(--err);
+}
+.menu-item .kbd {
+  margin-left: auto;
+}
+.menu-sep {
+  height: 1px;
+  background: var(--line);
+  margin: 5px 4px;
+}
+.menu-label {
+  font-size: 10.5px;
+  font-weight: 700;
+  letter-spacing: 1px;
+  color: var(--muted);
+  text-transform: uppercase;
+  padding: 6px 10px 4px;
+}
+.cloud-tag {
+  display: inline-flex;
+  align-items: center;
+  gap: 3px;
+}

@@ -2,6 +2,7 @@ import { Eye, FileArchive, FolderOpen, FolderOutput, Send, Trash2, Undo2 } from 
 import { useState } from 'react'
 import { api } from '../lib/api'
 import { chooseDirFlow } from '../lib/flows'
+import { FolderMenu } from '../components/FolderMenu'
 import { useStore } from '../state/store'
 import { Modal } from './Modal'
 
@@ -136,9 +137,9 @@ export function PackageDialog({ packageId }: { packageId: string | null }) {
         </div>
 
         <div className="row" style={{ marginTop: 6, flexWrap: 'wrap' }}>
-          <button className="btn sm" onClick={() => void chooseDirFlow('package', p.id)}>
+          <FolderMenu className="btn sm" onPick={(id) => void chooseDirFlow('package', p.id, id)}>
             <FolderOutput size={13} /> Individuellen Ordner wählen
-          </button>
+          </FolderMenu>
           {p.targetDir && (
             <button className="btn sm" onClick={() => void api.packages.clearTargetDir(p.id).then(() => s.refreshPackages())}>
               <Undo2 size={13} /> Globalen Ordner verwenden

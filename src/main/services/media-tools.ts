@@ -34,6 +34,7 @@ interface MediaInfo {
   mtime_ms: number
   meta_status: string
   thumb_status: string
+  cloud_state: string
 }
 
 /** Begrenzt die Laufzeit externer Decoder – ein hängendes Werkzeug darf nichts blockieren. */
@@ -218,7 +219,7 @@ export class MediaProcessor {
   private media(id: number): MediaInfo | null {
     return (
       (this.ctx.db
-        .prepare('SELECT id, project_id, current_path, location, kind, ext, size, mtime_ms, meta_status, thumb_status FROM media WHERE id = ?')
+        .prepare('SELECT id, project_id, current_path, location, kind, ext, size, mtime_ms, meta_status, thumb_status, cloud_state FROM media WHERE id = ?')
         .get(id) as MediaInfo | undefined) ?? null
     )
   }
@@ -234,19 +235,21 @@ export class MediaProcessor {
   }
 
   /** Vorschaubild (Raster). priority=true stellt die Anfrage vor Hintergrundaufgaben. */
-  getThumb(mediaId: number, priority = true): Promise<string | null> {
-    return this.request(mediaId, 'thumb', priority)
+  /** allowOnline=false: Dateien, die nur online im Cloud-Speicher liegen, werden nicht heruntergeladen. */
+  getThumb(mediaId: number, priority = true, allowOnline = false): Promise<string | null> {
+    return this.request(mediaId, 'thumb', priority, allowOnline)
   }
 
-  getPreview(mediaId: number): Promise<string | null> {
-    return this.request(mediaId, 'preview', true)
+  getPreview(mediaId: number, allowOnline = false): Promise<string | null> {
+    return this.request(mediaId, 'preview', true, allowOnline)
   }
 
-  private request(mediaId: number, kind: 'thumb' | 'preview', priority: boolean): Promise<string | null> {
+  private request(mediaId: number, kind: 'thumb' | 'preview', priority: boolean, allowOnline = false): Promise<string | null> {
     const m = this.media(mediaId)
     if (!m || m.location === 'missing') return Promise.resolve(null)
     const file = this.cacheFile(m, kind)
     if (fs.existsSync(file)) return Promise.resolve(file)
+    if (m.cloud_state === 'online' && !allowOnline) return Promise.resolve(null)
     const k = `${kind}:${mediaId}`
     const existing = this.inflight.get(k)
     if (existing) return existing
@@ -468,12 +471,12 @@ export class MediaProcessor {
     const state = { running: true, stop: false }
     this.background.set(projectId, state)
     void (async () => {
-      const total = (this.ctx.db.prepare("SELECT COUNT(*) AS n FROM media WHERE project_id = ? AND role = 'main' AND location != 'missing'").get(projectId) as { n: number }).n
+      const total = (this.ctx.db.prepare("SELECT COUNT(*) AS n FROM media WHERE project_id = ? AND role = 'main' AND location != 'missing' AND cloud_state = 'local'").get(projectId) as { n: number }).n
       let lastEmit = 0
       for (;;) {
         if (state.stop || this.closed) break
         const batch = this.ctx.db
-          .prepare("SELECT id FROM media WHERE project_id = ? AND role = 'main' AND location != 'missing' AND thumb_status = 'none' ORDER BY id LIMIT 50")
+          .prepare("SELECT id FROM media WHERE project_id = ? AND role = 'main' AND location != 'missing' AND thumb_status = 'none' AND cloud_state = 'local' ORDER BY id LIMIT 50")
           .all(projectId) as Array<{ id: number }>
         if (!batch.length) break
         // Hintergrund nur füllen, wenn die Vordergrund-Warteschlange leer ist
@@ -483,7 +486,7 @@ export class MediaProcessor {
         this.ctx.db
           .prepare(`UPDATE media SET thumb_status='error', thumb_error=COALESCE(thumb_error,'Keine Vorschau') WHERE id IN (${batch.map(() => '?').join(',')}) AND thumb_status='none'`)
           .run(...batch.map((b) => b.id))
-        const done = (this.ctx.db.prepare("SELECT COUNT(*) AS n FROM media WHERE project_id = ? AND role = 'main' AND location != 'missing' AND thumb_status != 'none'").get(projectId) as { n: number }).n
+        const done = (this.ctx.db.prepare("SELECT COUNT(*) AS n FROM media WHERE project_id = ? AND role = 'main' AND location != 'missing' AND cloud_state = 'local' AND thumb_status != 'none'").get(projectId) as { n: number }).n
         if (Date.now() - lastEmit > 400) {
           lastEmit = Date.now()
           onProgress(done, total, true)

@@ -2,12 +2,12 @@ import { api } from './api'
 import { useStore } from '../state/store'
 
 /** Quellordner hinzufügen inkl. Bestätigung, falls Ausgabe-/Wiederherstellungsordner darin liegen. */
-export async function addSourceFlow(): Promise<void> {
+export async function addSourceFlow(cloudRootId?: string): Promise<void> {
   const s = useStore.getState()
   if (!s.project) return
   const pid = s.project.id
   try {
-    const r = await api.sources.add(pid)
+    const r = await api.sources.add(pid, cloudRootId)
     if (r.status === 'error') s.toast('error', r.error ?? 'Ordner kann nicht hinzugefügt werden.')
     else if (r.status === 'added') s.toast('success', 'Quelle hinzugefügt – Indexierung läuft.')
     else if (r.status === 'needs-confirmation') {
@@ -29,11 +29,11 @@ export async function addSourceFlow(): Promise<void> {
 }
 
 /** Ordnerauswahl mit optionaler Bestätigung (Ausgabe- oder Paketordner). */
-export async function chooseDirFlow(kind: 'output' | 'package', packageId?: string): Promise<void> {
+export async function chooseDirFlow(kind: 'output' | 'package', packageId?: string, cloudRootId?: string): Promise<void> {
   const s = useStore.getState()
   if (!s.project) return
   const pid = s.project.id
-  const run = (token?: string) => (kind === 'output' ? api.projects.chooseOutputDir(pid, token) : api.packages.chooseTargetDir(packageId!, token))
+  const run = (token?: string) => (kind === 'output' ? api.projects.chooseOutputDir(pid, token, token ? undefined : cloudRootId) : api.packages.chooseTargetDir(packageId!, token, token ? undefined : cloudRootId))
   try {
     const r = await run()
     if (r.status === 'error') s.toast('error', r.message ?? 'Ordner ungeeignet.')

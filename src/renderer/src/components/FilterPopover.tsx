@@ -183,6 +183,7 @@ export function FilterPopover() {
           <option value="all">Alle</option>
           <option value="moved">Verschoben (im Wiederherstellungsbereich)</option>
           <option value="missing">Quelle fehlt</option>
+          <option value="cloud">Nur online (Cloud-Speicher)</option>
         </select>
       </div>
 

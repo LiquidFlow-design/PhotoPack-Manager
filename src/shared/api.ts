@@ -5,6 +5,7 @@ import type {
   AppSettings,
   AssignmentDelta,
   AssignResult,
+  CloudRootInfo,
   ColorLabel,
   ConflictPolicy,
   DuplicateGroup,
@@ -68,7 +69,7 @@ export interface PpmApi {
     remove(id: string): Promise<{ recoveryDirKept: string | null; recoveryFiles: number }>
     update(id: string, patch: { workMode?: WorkMode; operation?: Operation; conflictPolicy?: ConflictPolicy }): Promise<Project>
     saveUi(id: string, ui: ProjectUiState): Promise<void>
-    chooseOutputDir(id: string, confirmToken?: string): Promise<ChooseDirResult>
+    chooseOutputDir(id: string, confirmToken?: string, cloudRootId?: string): Promise<ChooseDirResult>
     clearOutputDir(id: string): Promise<Project>
     chooseRecoveryDir(id: string): Promise<ChooseDirResult>
     resetRecoveryDir(id: string): Promise<Project>
@@ -78,11 +79,12 @@ export interface PpmApi {
     importBackup(): Promise<{ projectId: string; name: string; media: number } | null>
   }
   sources: {
-    add(projectId: string): Promise<AddSourceResult>
+    add(projectId: string, cloudRootId?: string): Promise<AddSourceResult>
     confirmAdd(projectId: string, token: string): Promise<AddSourceResult>
     rescan(projectId: string, sourceId?: string): Promise<void>
     remove(sourceId: string): Promise<{ removedMedia: number; keptMoved: number }>
     list(projectId: string): Promise<Source[]>
+    cloudRoots(): Promise<CloudRootInfo[]>
   }
   media: {
     list(projectId: string): Promise<MediaRow[]>
@@ -98,7 +100,7 @@ export interface PpmApi {
     create(projectId: string, name: string, color?: string): Promise<PackageInfo>
     update(id: string, patch: { name?: string; color?: string; shortcut?: number | null; sortOrder?: number }): Promise<PackageInfo>
     remove(id: string): Promise<{ removedAssignments: number; cancelledItems: number }>
-    chooseTargetDir(id: string, confirmToken?: string): Promise<ChooseDirResult>
+    chooseTargetDir(id: string, confirmToken?: string, cloudRootId?: string): Promise<ChooseDirResult>
     clearTargetDir(id: string): Promise<PackageInfo>
     openTarget(id: string): Promise<void>
     order(id: string): Promise<number[]>
@@ -160,7 +162,7 @@ export const API_METHODS = {
     'exportBackup',
     'importBackup'
   ],
-  sources: ['add', 'confirmAdd', 'rescan', 'remove', 'list'],
+  sources: ['add', 'confirmAdd', 'rescan', 'remove', 'list', 'cloudRoots'],
   media: ['list', 'rows', 'detail', 'reveal', 'revealPath', 'setRating', 'setColor'],
   packages: ['list', 'create', 'update', 'remove', 'chooseTargetDir', 'clearTargetDir', 'openTarget', 'order', 'reorderMedia', 'reorder', 'exportZip'],
   assign: ['apply', 'list'],

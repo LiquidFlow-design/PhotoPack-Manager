@@ -58,6 +58,7 @@ export function matchesFilter(m: MediaRow, f: FilterState, ctx: FilterContext): 
   if (f.colorLabels.length && (!m.colorLabel || !f.colorLabels.includes(m.colorLabel))) return false
   if (f.location === 'moved' && m.location !== 'recovery') return false
   if (f.location === 'missing' && m.location !== 'missing') return false
+  if (f.location === 'cloud' && !m.cloudOnline) return false
   if (f.dateFrom && mediaDate(m) < dayStart(f.dateFrom)) return false
   if (f.dateTo && mediaDate(m) > dayEnd(f.dateTo)) return false
 
@@ -173,7 +174,11 @@ export function activeChips(f: FilterState, packageNames: Map<string, string>): 
       clear: (x) => ({ ...x, exportState: 'all' })
     })
   if (f.location !== 'all')
-    chips.push({ key: 'loc', label: f.location === 'moved' ? 'Verschoben' : 'Quelle fehlt', clear: (x) => ({ ...x, location: 'all' }) })
+    chips.push({
+      key: 'loc',
+      label: f.location === 'moved' ? 'Verschoben' : f.location === 'cloud' ? 'Nur online' : 'Quelle fehlt',
+      clear: (x) => ({ ...x, location: 'all' })
+    })
   return chips
 }
 

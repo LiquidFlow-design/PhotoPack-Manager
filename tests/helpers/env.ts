@@ -3,7 +3,7 @@ import fs from 'node:fs'
 import os from 'node:os'
 import path from 'node:path'
 import { openDatabase, type DB } from '../../src/main/db/database'
-import { createContext, type CoreContext } from '../../src/main/core/context'
+import { createContext, type CloudFns, type CoreContext } from '../../src/main/core/context'
 import { inlineFileOps, type FileOps } from '../../src/main/core/fileops'
 import { Faults } from '../../src/main/core/faults'
 import { TransferEngine } from '../../src/main/core/engine'
@@ -56,7 +56,7 @@ export function writeFile(p: string, data: Buffer | string): void {
 
 export async function makeEnv(
   files: Record<string, Buffer | string> = {},
-  opts: { fileOps?: FileOps; outDirInside?: boolean; recoveryDir?: string; concurrency?: number } = {}
+  opts: { fileOps?: FileOps; outDirInside?: boolean; recoveryDir?: string; concurrency?: number; cloud?: CloudFns } = {}
 ): Promise<TestEnv> {
   const base = path.join(process.cwd(), '.tmp-tests')
   fs.mkdirSync(base, { recursive: true })
@@ -88,7 +88,7 @@ export async function makeEnv(
     async restart() {
       env.db.close()
       env.db = openDatabase(dbFile)
-      env.ctx = createContext({ db: env.db, fileOps: opts.fileOps ?? inlineFileOps, dataDir, emit: (e) => events.push(e), now: () => clock.t, faults: new Faults() })
+      env.ctx = createContext({ db: env.db, fileOps: opts.fileOps ?? inlineFileOps, dataDir, emit: (e) => events.push(e), now: () => clock.t, faults: new Faults(), cloud: env.ctx.cloud })
       env.engine = new TransferEngine(env.ctx, { concurrency: opts.concurrency ?? 2 })
       const r = await env.engine.reconcile()
       env.engine.start()
@@ -104,7 +104,8 @@ export async function makeEnv(
     }
   }
   env.db = openDatabase(dbFile)
-  env.ctx = createContext({ db: env.db, fileOps: opts.fileOps ?? inlineFileOps, dataDir, emit: (e) => events.push(e), now: () => clock.t, faults })
+  const cloud: CloudFns = opts.cloud ?? { roots: async () => [], onlineOnly: async () => new Set() }
+  env.ctx = createContext({ db: env.db, fileOps: opts.fileOps ?? inlineFileOps, dataDir, emit: (e) => events.push(e), now: () => clock.t, faults, cloud })
   env.engine = new TransferEngine(env.ctx, { concurrency: opts.concurrency ?? 2 })
   env.engine.start()
   updateSettings(env.ctx, { instantDelaySec: 0 })

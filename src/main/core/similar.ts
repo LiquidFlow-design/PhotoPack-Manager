@@ -37,7 +37,7 @@ export async function scanSimilar(
   onProgress?: (done: number, total: number) => void
 ): Promise<{ groups: number; hashed: number }> {
   const missing = ctx.db
-    .prepare("SELECT id FROM media WHERE project_id = ? AND role = 'main' AND location != 'missing' AND phash IS NULL AND thumb_status != 'error'")
+    .prepare("SELECT id FROM media WHERE project_id = ? AND role = 'main' AND location != 'missing' AND phash IS NULL AND thumb_status != 'error' AND cloud_state = 'local'")
     .all(projectId) as Array<{ id: number }>
   let done = 0
   const total = missing.length

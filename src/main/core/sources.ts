@@ -4,6 +4,7 @@ import { extOf, kindForExt } from '@shared/media-kinds'
 import type { Source } from '@shared/types'
 import { newId, oplog, thumbsDir, type CoreContext } from './context'
 import { isInside, isOwnTempFile, pathKey, realPathOrSelf, SKIP_DIR_NAMES } from './paths'
+import { cloudRootFor } from './cloud'
 import { getProject } from './projects'
 
 export class SourceError extends Error {}
@@ -20,6 +21,7 @@ interface SourceRow {
   file_count: number
   skipped_links: number
   excluded_json: string
+  cloud_provider: string | null
 }
 
 function toSource(r: SourceRow): Source {
@@ -33,7 +35,8 @@ function toSource(r: SourceRow): Source {
     scanError: r.scan_error,
     fileCount: r.file_count,
     skippedLinks: r.skipped_links,
-    excludedPaths: JSON.parse(r.excluded_json) as string[]
+    excludedPaths: JSON.parse(r.excluded_json) as string[],
+    cloudProvider: r.cloud_provider ?? null
   }
 }
 
@@ -113,9 +116,10 @@ export async function addSource(ctx: CoreContext, projectId: string, dir: string
     throw new SourceError('Die Quelle enthält Ausgabe- oder Wiederherstellungsordner. Bestätigung für den Ausschluss erforderlich.')
   }
   const id = newId()
+  const cloud = cloudRootFor(path.resolve(dir), await ctx.cloud.roots().catch(() => []))
   ctx.db
-    .prepare('INSERT INTO sources (id, project_id, path, real_path, added_at, excluded_json) VALUES (?,?,?,?,?,?)')
-    .run(id, projectId, path.resolve(dir), chk.realPath, ctx.now(), JSON.stringify(chk.exclusions))
+    .prepare('INSERT INTO sources (id, project_id, path, real_path, added_at, excluded_json, cloud_provider) VALUES (?,?,?,?,?,?,?)')
+    .run(id, projectId, path.resolve(dir), chk.realPath, ctx.now(), JSON.stringify(chk.exclusions), cloud?.provider ?? null)
   oplog(ctx, projectId, 'info', 'source.add', 'source', id, { path: dir, exclusions: chk.exclusions })
   return getSource(ctx, id)
 }
@@ -220,6 +224,7 @@ export interface ScanResult {
   skippedLinks: number
   skippedDirs: number
   errors: string[]
+  onlineOnly?: number
 }
 
 interface FoundFile {
@@ -403,6 +408,25 @@ export async function scanSource(ctx: CoreContext, sourceId: string, signal?: Ab
     for (let i = 0; i < linked.length; i += 500) flush(linked.slice(i, i + 500))
   }
   computePairs(ctx, sourceId)
+
+  // Cloud-Speicher: „Nur online“-Platzhalter markieren (nur Metadaten, kein Download)
+  if (src.cloud_provider && !signal?.aborted) {
+    const online = await ctx.cloud.onlineOnly(src.path).catch(() => new Set<string>())
+    const keys = new Set([...online].map((p) => pathKey(p)))
+    const rows = ctx.db.prepare("SELECT id, path_key, cloud_state FROM media WHERE source_id = ? AND location = 'source'").all(sourceId) as Array<{
+      id: number
+      path_key: string
+      cloud_state: string
+    }>
+    const set = ctx.db.prepare('UPDATE media SET cloud_state = ? WHERE id = ?')
+    ctx.db.transaction(() => {
+      for (const r of rows) {
+        const st = keys.has(r.path_key) ? 'online' : 'local'
+        if (st !== r.cloud_state) set.run(st, r.id)
+      }
+    })()
+    result.onlineOnly = keys.size
+  }
 
   const aborted = !!signal?.aborted
   if (!aborted) {

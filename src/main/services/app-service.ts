@@ -50,10 +50,11 @@ interface MediaDbRow {
   color_label: MediaRow['colorLabel']
   sim_group: number | null
   sidecars: number
+  cloud_state: string
 }
 
 const MEDIA_COLS =
-  "id, source_id, file_name, ext, kind, rel_dir, size, mtime_ms, captured_at, width, height, duration_ms, location, thumb_status, thumb_error, dup_group, sha256, pair_id, rating, color_label, sim_group, (SELECT COUNT(*) FROM media sc WHERE sc.parent_id = media.id) AS sidecars"
+  "id, source_id, file_name, ext, kind, rel_dir, size, mtime_ms, captured_at, width, height, duration_ms, location, thumb_status, thumb_error, dup_group, sha256, pair_id, rating, color_label, sim_group, cloud_state, (SELECT COUNT(*) FROM media sc WHERE sc.parent_id = media.id) AS sidecars"
 const MAIN = "role = 'main'"
 
 function toRow(r: MediaDbRow): MediaRow {
@@ -79,7 +80,8 @@ function toRow(r: MediaDbRow): MediaRow {
     sidecars: r.sidecars ?? 0,
     rating: r.rating ?? 0,
     colorLabel: r.color_label ?? null,
-    simGroup: r.sim_group
+    simGroup: r.sim_group,
+    cloudOnline: r.cloud_state === 'online'
   }
 }
 
@@ -212,12 +214,11 @@ export class AppService {
     }
   }
 
-  mediaPath(mediaId: number): { path: string; kind: string; ext: string; location: string } | null {
-    return (
-      (this.db.prepare('SELECT current_path AS path, kind, ext, location FROM media WHERE id = ?').get(mediaId) as
-        | { path: string; kind: string; ext: string; location: string }
-        | undefined) ?? null
-    )
+  mediaPath(mediaId: number): { path: string; kind: string; ext: string; location: string; cloudOnline: boolean } | null {
+    const r = this.db.prepare('SELECT current_path AS path, kind, ext, location, cloud_state FROM media WHERE id = ?').get(mediaId) as
+      | { path: string; kind: string; ext: string; location: string; cloud_state: string }
+      | undefined
+    return r ? { path: r.path, kind: r.kind, ext: r.ext, location: r.location, cloudOnline: r.cloud_state === 'online' } : null
   }
 
   // ---------------- Hintergrundaufgaben

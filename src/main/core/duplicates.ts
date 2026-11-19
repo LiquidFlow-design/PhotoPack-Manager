@@ -12,7 +12,7 @@ export async function scanDuplicates(
   const cands = ctx.db
     .prepare(
       `SELECT id, current_path, size, sha256 FROM media
-       WHERE project_id = ? AND role = 'main' AND location != 'missing' AND size > 0
+       WHERE project_id = ? AND role = 'main' AND location != 'missing' AND cloud_state = 'local' AND size > 0
          AND size IN (SELECT size FROM media WHERE project_id = ? AND role = 'main' AND location != 'missing' AND size > 0 GROUP BY size HAVING COUNT(*) > 1)`
     )
     .all(projectId, projectId) as Array<{ id: number; current_path: string; size: number; sha256: string | null }>

@@ -37,6 +37,7 @@ export function SourcesDialog() {
           {s.scanStatus === 'unavailable' && <AlertTriangle size={16} className="warn" />}
           <div style={{ flex: 1, minWidth: 0 }}>
             <div className="mono ellipsis">{s.path}</div>
+            {s.cloudProvider && <div className="tiny" style={{ color: 'var(--accent)' }}>{s.cloudProvider} · „Nur online“-Dateien werden erst bei Bedarf geladen</div>}
             <div className="tiny muted">
               {s.fileCount.toLocaleString('de-DE')} Medien · zuletzt indexiert {fmtDate(s.lastScanAt)}
               {s.skippedLinks ? ` · ${s.skippedLinks} Verknüpfung(en) übersprungen` : ''}

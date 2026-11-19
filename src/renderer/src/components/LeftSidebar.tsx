@@ -1,7 +1,8 @@
-import { AlertTriangle, Copy, FolderOpen, FolderPlus, History, Images, LifeBuoy, PanelLeftClose, PanelLeftOpen, RefreshCw, Trash2 } from 'lucide-react'
+import { AlertTriangle, Cloud, Copy, FolderOpen, FolderPlus, History, Images, LifeBuoy, PanelLeftClose, PanelLeftOpen, RefreshCw, Trash2 } from 'lucide-react'
 import { api } from '../lib/api'
 import { useStore } from '../state/store'
 import { addSourceFlow } from '../lib/flows'
+import { FolderMenu } from './FolderMenu'
 
 export function LeftSidebar({ collapsed, auto }: { collapsed: boolean; auto: boolean }) {
   const s = useStore()
@@ -59,7 +60,15 @@ export function LeftSidebar({ collapsed, auto }: { collapsed: boolean; auto: boo
                 onClick={() => s.setSourceFilter(src.id)}
                 aria-pressed={sourceId === src.id}
               >
-                {src.scanStatus === 'unavailable' || src.scanStatus === 'error' ? <AlertTriangle size={16} className="warn" /> : scanning ? <div className="spinner" /> : <FolderOpen size={16} />}
+                {src.scanStatus === 'unavailable' || src.scanStatus === 'error' ? (
+                  <AlertTriangle size={16} className="warn" />
+                ) : scanning ? (
+                  <div className="spinner" />
+                ) : src.cloudProvider ? (
+                  <Cloud size={16} aria-label={src.cloudProvider} />
+                ) : (
+                  <FolderOpen size={16} />
+                )}
                 <span className="ellipsis">{name}</span>
               </button>
               <span className="count">{(counts.get(src.id) ?? 0).toLocaleString('de-DE')}</span>
@@ -93,9 +102,11 @@ export function LeftSidebar({ collapsed, auto }: { collapsed: boolean; auto: boo
           )
         })}
         {sources.some((x) => x.scanStatus === 'unavailable') && <p className="hint warn">Mindestens eine Quelle ist nicht erreichbar (Laufwerk getrennt?).</p>}
-        <button className="add-btn" style={{ marginTop: 8 }} onClick={() => void addSourceFlow()}>
-          <FolderPlus size={16} /> Quellordner hinzufügen
-        </button>
+        <div style={{ marginTop: 8 }}>
+          <FolderMenu className="add-btn" onPick={(id) => void addSourceFlow(id)}>
+            <FolderPlus size={16} /> Quellordner hinzufügen
+          </FolderMenu>
+        </div>
         <div className="divider" />
         <div className="h-section">Projekt</div>
         <button className="nav-item" onClick={() => s.openDialog({ type: 'sources' })}>

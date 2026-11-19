@@ -7,6 +7,7 @@ import { effectiveTargetDir } from './packages'
 import { isInside, nameKey, numberedName, pathKey, volumeRoot } from './paths'
 import { getProject } from './projects'
 import { resolveRecoveryDir } from './recovery'
+import { cloudRootFor } from './cloud'
 
 export interface PlannedCopy {
   mediaId: number
@@ -284,6 +285,32 @@ export async function buildPlan(
     volumes.push({ root, requiredBytes: bytes, freeBytes: free, ok })
     if (!ok) blocking.push(`Nicht genügend Speicherplatz auf ${root} (benötigt ca. ${fmtBytes(bytes)}, frei ${fmtBytes(free ?? 0)}).`)
   }
+
+  // Cloud-Speicher (Proton Drive, OneDrive …)
+  const cloudQ = ctx.db.prepare('SELECT m.cloud_state AS st, s.cloud_provider AS prov FROM media m LEFT JOIN sources s ON s.id = m.source_id WHERE m.id = ?')
+  const onlineBy = new Map<string, number>()
+  const seenCloud = new Set<number>()
+  for (const c of copies) {
+    if (seenCloud.has(c.mediaId)) continue
+    seenCloud.add(c.mediaId)
+    const r = cloudQ.get(c.mediaId) as { st: string; prov: string | null } | undefined
+    if (r?.st === 'online') onlineBy.set(r.prov ?? 'Cloud', (onlineBy.get(r.prov ?? 'Cloud') ?? 0) + 1)
+  }
+  for (const [prov, n] of onlineBy) warnings.push(`${n} Datei(en) liegen nur online in ${prov} und werden beim Export heruntergeladen.`)
+  const releaseBy = new Map<string, number>()
+  for (const r of releases) {
+    const x = cloudQ.get(r.mediaId) as { st: string; prov: string | null } | undefined
+    if (x?.prov) releaseBy.set(x.prov, (releaseBy.get(x.prov) ?? 0) + 1)
+  }
+  for (const [prov, n] of releaseBy)
+    warnings.push(`Verschieben entfernt ${n} Datei(en) aus ${prov} – über die Synchronisation auch online. Die Originale bleiben im Wiederherstellungsbereich.`)
+  const roots = await ctx.cloud.roots().catch(() => [])
+  const targetClouds = new Set<string>()
+  for (const sum of pkgSummaries.values()) {
+    const r = sum.targetDir ? cloudRootFor(sum.targetDir, roots) : null
+    if (r) targetClouds.add(r.provider)
+  }
+  for (const prov of targetClouds) warnings.push(`Ziel liegt in ${prov}: exportierte Dateien werden anschließend hochgeladen.`)
 
   if (createdDirs.length === 1) warnings.push(`Zielordner wird angelegt: ${createdDirs[0]}`)
   else if (createdDirs.length > 1) warnings.push(`${createdDirs.length} Zielordner werden angelegt (je Paket ein Unterordner).`)

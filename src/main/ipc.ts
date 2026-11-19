@@ -19,6 +19,7 @@ import { packageOrder, reorderPackage } from './core/assignments'
 import { reorderPackages } from './core/packages'
 import { setColorLabel, setRating } from './core/media-meta'
 import { exportProject, importProject } from './core/backup'
+import { detectCloudRoots } from './core/cloud'
 
 const id = z.string().min(1).max(64)
 const mediaId = z.number().int().positive()
@@ -37,7 +38,7 @@ const filterSchema = z.object({
   dateFrom: z.string().regex(/^\d{4}-\d{2}-\d{2}$/).nullable(),
   dateTo: z.string().regex(/^\d{4}-\d{2}-\d{2}$/).nullable(),
   exportState: z.enum(['all', 'exported', 'pending']),
-  location: z.enum(['all', 'moved', 'missing']),
+  location: z.enum(['all', 'moved', 'missing', 'cloud']),
   minRating: z.number().int().min(0).max(5),
   colorLabels: z.array(z.enum(['red', 'yellow', 'green', 'blue', 'purple'])).max(5),
   search: z.string().max(500)
@@ -91,6 +92,12 @@ function take(token: string, projectId: string, purpose: string): string | null 
   pendingPaths.delete(token)
   if (!v || v.projectId !== projectId || v.purpose !== purpose || v.expires < Date.now()) return null
   return v.path
+}
+
+async function cloudStart(rootId?: string): Promise<string | undefined> {
+  if (!rootId) return undefined
+  const roots = await detectCloudRoots()
+  return roots.find((r) => r.id === rootId)?.path
 }
 
 async function pickDir(title: string, defaultPath?: string): Promise<string | null> {
@@ -191,15 +198,15 @@ export function registerIpc(getSvc: () => AppService, win: WindowHooks): void {
       },
       saveUi: { args: z.tuple([id, uiSchema]), fn: (pid: string, ui: z.infer<typeof uiSchema>) => saveUiState(getSvc().ctx, pid, ui) },
       chooseOutputDir: {
-        args: z.tuple([id, z.string().optional()]),
-        fn: async (pid: string, token?: string): Promise<ChooseDirResult> => {
+        args: z.tuple([id, z.string().max(64).optional(), z.string().max(64).optional()]),
+        fn: async (pid: string, token?: string, cloudRootId?: string): Promise<ChooseDirResult> => {
           const svc = getSvc()
           let dir: string | null
           if (token) {
             dir = take(token, pid, 'output')
             if (!dir) return { status: 'error', message: 'Bestätigung abgelaufen.' }
           } else {
-            dir = await pickDir('Globalen Ausgabeordner wählen', getProject(svc.ctx, pid).outputDir ?? undefined)
+            dir = await pickDir('Globalen Ausgabeordner wählen', (await cloudStart(cloudRootId)) ?? getProject(svc.ctx, pid).outputDir ?? undefined)
             if (!dir) return { status: 'cancelled' }
             const chk = await checkTargetDir(svc, pid, dir)
             if (chk.error) return { status: 'error', message: chk.error }
@@ -270,10 +277,10 @@ export function registerIpc(getSvc: () => AppService, win: WindowHooks): void {
     },
     sources: {
       add: {
-        args: z.tuple([id]),
-        fn: async (pid: string): Promise<AddSourceResult> => {
+        args: z.tuple([id, z.string().max(64).optional()]),
+        fn: async (pid: string, cloudRootId?: string): Promise<AddSourceResult> => {
           const svc = getSvc()
-          const dir = await pickDir('Quellordner hinzufügen')
+          const dir = await pickDir('Quellordner hinzufügen', await cloudStart(cloudRootId))
           if (!dir) return { status: 'cancelled' }
           const chk = await checkSourcePath(svc.ctx, pid, dir)
           if (!chk.ok) return { status: 'error', error: chk.error ?? 'Ungültiger Ordner', path: dir }
@@ -311,7 +318,8 @@ export function registerIpc(getSvc: () => AppService, win: WindowHooks): void {
           return r
         }
       },
-      list: { args: z.tuple([id]), fn: (pid: string) => listSources(getSvc().ctx, pid) }
+      list: { args: z.tuple([id]), fn: (pid: string) => listSources(getSvc().ctx, pid) },
+      cloudRoots: { args: z.tuple([]), fn: () => detectCloudRoots({ force: true }) }
     },
     media: {
       list: { args: z.tuple([id]), fn: (pid: string) => getSvc().listMedia(pid) },
@@ -366,8 +374,8 @@ export function registerIpc(getSvc: () => AppService, win: WindowHooks): void {
       },
       remove: { args: z.tuple([id]), fn: (pkgId: string) => deletePackage(getSvc().ctx, pkgId) },
       chooseTargetDir: {
-        args: z.tuple([id, z.string().optional()]),
-        fn: async (pkgId: string, token?: string): Promise<ChooseDirResult> => {
+        args: z.tuple([id, z.string().max(64).optional(), z.string().max(64).optional()]),
+        fn: async (pkgId: string, token?: string, cloudRootId?: string): Promise<ChooseDirResult> => {
           const svc = getSvc()
           const row = svc.db.prepare('SELECT project_id, name FROM packages WHERE id = ?').get(pkgId) as { project_id: string; name: string } | undefined
           if (!row) return { status: 'error', message: 'Paket nicht gefunden.' }
@@ -376,7 +384,7 @@ export function registerIpc(getSvc: () => AppService, win: WindowHooks): void {
             dir = take(token, row.project_id, 'pkg:' + pkgId)
             if (!dir) return { status: 'error', message: 'Bestätigung abgelaufen.' }
           } else {
-            dir = await pickDir(`Zielordner für „${row.name}“ wählen`)
+            dir = await pickDir(`Zielordner für „${row.name}“ wählen`, await cloudStart(cloudRootId))
             if (!dir) return { status: 'cancelled' }
             const chk = await checkTargetDir(svc, row.project_id, dir)
             if (chk.error) return { status: 'error', message: chk.error }

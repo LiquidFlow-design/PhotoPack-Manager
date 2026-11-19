@@ -4,6 +4,7 @@ import type { AppEvent } from '@shared/types'
 import type { DB } from '../db/database'
 import type { FileOps } from './fileops'
 import { Faults } from './faults'
+import { detectCloudRoots, scanOnlineOnly, type CloudRoot } from './cloud'
 
 export interface CoreContext {
   db: DB
@@ -12,16 +13,33 @@ export interface CoreContext {
   emit: (evt: AppEvent) => void
   now: () => number
   faults: Faults
+  cloud: CloudFns
 }
 
-export function createContext(opts: { db: DB; fileOps: FileOps; dataDir: string; emit?: (e: AppEvent) => void; now?: () => number; faults?: Faults }): CoreContext {
+export interface CloudFns {
+  roots(): Promise<CloudRoot[]>
+  onlineOnly(dir: string): Promise<Set<string>>
+}
+
+export const defaultCloud: CloudFns = { roots: () => detectCloudRoots(), onlineOnly: (d) => scanOnlineOnly(d) }
+
+export function createContext(opts: {
+  db: DB
+  fileOps: FileOps
+  dataDir: string
+  emit?: (e: AppEvent) => void
+  now?: () => number
+  faults?: Faults
+  cloud?: CloudFns
+}): CoreContext {
   return {
     db: opts.db,
     fileOps: opts.fileOps,
     dataDir: opts.dataDir,
     emit: opts.emit ?? (() => {}),
     now: opts.now ?? (() => Date.now()),
-    faults: opts.faults ?? new Faults()
+    faults: opts.faults ?? new Faults(),
+    cloud: opts.cloud ?? defaultCloud
   }
 }
 

@@ -90,27 +90,30 @@ export function registerProtocol(svc: () => AppService | null): void {
     if (!Number.isInteger(id) || id <= 0) return notFound()
     const m = s.mediaPath(id)
     if (!m || m.location === 'missing') return notFound()
+    const allowOnline = url.searchParams.get('load') === '1'
+    // „Nur online“ im Cloud-Speicher: Originaldatei nur auf ausdrückliche Anforderung lesen (löst Download aus)
+    const mayReadOriginal = !m.cloudOnline || allowOnline
     switch (url.host) {
       case 'thumb': {
-        const f = await s.media.getThumb(id, true)
+        const f = await s.media.getThumb(id, true, allowOnline)
         if (f) return serveFile(f, req, 'image/webp', true)
         // Rückfall: Browser-native Formate (z. B. BMP) direkt anzeigen
-        if (m.kind === 'image' && BROWSER_NATIVE_IMAGE.has(m.ext)) return serveFile(m.path, req, MIME[m.ext] ?? 'application/octet-stream')
+        if (mayReadOriginal && m.kind === 'image' && BROWSER_NATIVE_IMAGE.has(m.ext)) return serveFile(m.path, req, MIME[m.ext] ?? 'application/octet-stream')
         return notFound()
       }
       case 'preview': {
         if (s.media.needsPreview(m)) {
-          const f = await s.media.getPreview(id)
+          const f = await s.media.getPreview(id, allowOnline)
           return f ? serveFile(f, req, 'image/jpeg', true) : notFound()
         }
         if (m.kind === 'video') {
-          const f = await s.media.getThumb(id, true)
+          const f = await s.media.getThumb(id, true, allowOnline)
           return f ? serveFile(f, req, 'image/webp', true) : notFound()
         }
-        return serveFile(m.path, req, MIME[m.ext] ?? 'application/octet-stream')
+        return mayReadOriginal ? serveFile(m.path, req, MIME[m.ext] ?? 'application/octet-stream') : notFound()
       }
       case 'media':
-        return serveFile(m.path, req, MIME[m.ext] ?? 'application/octet-stream')
+        return mayReadOriginal ? serveFile(m.path, req, MIME[m.ext] ?? 'application/octet-stream') : notFound()
       default:
         return notFound()
     }
